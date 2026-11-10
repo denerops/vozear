@@ -22,7 +22,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [papeis, setPapeis] = useState<Papel[]>([])
 
   useEffect(() => {
-    if (!supabase) return
+    const client = supabase
+    if (!client) return
     let alive = true
     let generation = 0
 
@@ -37,8 +38,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
       const userId = next.user.id
       void Promise.all([
-        supabase.from("perfis").select("nome").eq("id", userId).maybeSingle(),
-        supabase.from("papeis").select("papel").eq("user_id", userId),
+        client.from("perfis").select("nome").eq("id", userId).maybeSingle(),
+        client.from("papeis").select("papel").eq("user_id", userId),
       ])
         .then(([perfil, papeisResult]) => {
           if (!alive || current !== generation) return
@@ -51,10 +52,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         })
     }
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void client.auth.getSession().then(({ data }) => {
       if (alive) apply(data.session)
     })
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data } = client.auth.onAuthStateChange((_event, next) => {
       apply(next)
     })
     return () => {
