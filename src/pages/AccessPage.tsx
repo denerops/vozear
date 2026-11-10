@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { useSession } from "../auth/session.tsx"
+import { AuthLayout } from "../components/AuthLayout.tsx"
 import { ErrorNote } from "../components/ui.tsx"
 import { client } from "../lib/supabase.ts"
 
@@ -22,37 +23,39 @@ export function AccessPage() {
   }
 
   return (
-    <main className="center-card">
-      <p className="eyebrow">Primeiro acesso</p>
-      <h1>Defina sua senha</h1>
-      {session.loading ? <p className="muted">Conferindo o convite…</p> : null}
-      {!session.loading && !session.userId ? (
-        <p>Abra o link do e-mail neste aparelho. Se ele expirou, peça outro convite.</p>
-      ) : null}
-      {session.userId && !done ? (
-        <form className="stack" onSubmit={onSubmit}>
-          <label>
-            Nova senha
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </label>
-          <ErrorNote>{error}</ErrorNote>
-          <button className="btn" type="submit" disabled={pending}>
-            {pending ? "Salvando…" : "Salvar senha"}
-          </button>
-        </form>
-      ) : null}
-      {done ? (
-        <p>
-          Senha definida. <Link to="/">Entrar na escola</Link>
-        </p>
-      ) : null}
-    </main>
+    <AuthLayout>
+      <main className="center-card">
+        <p className="eyebrow">Primeiro acesso</p>
+        <h1>Defina sua senha</h1>
+        {session.loading ? <p className="muted">Conferindo o convite…</p> : null}
+        {!session.loading && !session.userId ? (
+          <p>Abra o link do e-mail neste aparelho. Se ele expirou, peça outro convite.</p>
+        ) : null}
+        {session.userId && !done ? (
+          <form className="stack" onSubmit={onSubmit}>
+            <label>
+              Nova senha
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </label>
+            <ErrorNote>{error}</ErrorNote>
+            <button className="btn" type="submit" disabled={pending}>
+              {pending ? "Salvando…" : "Salvar senha"}
+            </button>
+          </form>
+        ) : null}
+        {done ? (
+          <p>
+            Senha definida. <Link to="/">Entrar na escola</Link>
+          </p>
+        ) : null}
+      </main>
+    </AuthLayout>
   )
 }

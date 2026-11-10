@@ -54,7 +54,7 @@ export function InstrumentPicks({
               onChange(on ? selected.filter((id) => id !== item.id) : [...selected, item.id])
             }
           >
-            <i style={{ background: on ? "#fff8f4" : toneFor(item.nome).dot }} />
+            <i style={{ background: toneFor(item.nome).dot }} />
             {item.nome}
           </button>
         )

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react"
 import { Navigate } from "react-router-dom"
 import { useSession } from "../auth/session.tsx"
+import { AuthLayout } from "../components/AuthLayout.tsx"
 import { ErrorNote } from "../components/ui.tsx"
 import { accessRedirect } from "../lib/format.ts"
 import { client } from "../lib/supabase.ts"
@@ -41,40 +42,42 @@ export function LoginPage() {
   }
 
   return (
-    <main className="center-card">
-      <p className="eyebrow">Escola de música</p>
-      <h1>Vozear</h1>
-      <p className="lede">Agenda, recados e mensalidade no mesmo lugar.</p>
-      <form className="stack" onSubmit={onSubmit}>
-        <label>
-          E-mail
-          <input
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Senha
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        <ErrorNote>{error}</ErrorNote>
-        {info ? <p className="muted">{info}</p> : null}
-        <button className="btn" type="submit" disabled={pending}>
-          {pending ? "Entrando…" : "Entrar"}
-        </button>
-        <button className="btn ghost" type="button" onClick={forgot}>
-          Esqueci minha senha
-        </button>
-      </form>
-    </main>
+    <AuthLayout>
+      <main className="center-card">
+        <p className="eyebrow">Escola de música</p>
+        <h1>Entrar</h1>
+        <p className="lede">Agenda, recados e mensalidade no mesmo lugar.</p>
+        <form className="stack" onSubmit={onSubmit}>
+          <label>
+            E-mail
+            <input
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Senha
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          <ErrorNote>{error}</ErrorNote>
+          {info ? <p className="muted">{info}</p> : null}
+          <button className="btn" type="submit" disabled={pending}>
+            {pending ? "Entrando…" : "Entrar"}
+          </button>
+          <button className="btn ghost" type="button" onClick={forgot}>
+            Esqueci minha senha
+          </button>
+        </form>
+      </main>
+    </AuthLayout>
   )
 }

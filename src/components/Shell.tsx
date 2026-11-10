@@ -1,8 +1,9 @@
 import type { ReactNode } from "react"
 import { NavLink, Outlet } from "react-router-dom"
 import { useSession } from "../auth/session.tsx"
+import { LogoMark } from "./Brand.tsx"
 
-type IconName = "home" | "calendar" | "people" | "cap" | "card" | "gear"
+type IconName = "home" | "calendar" | "people" | "cap" | "card" | "gear" | "exit"
 
 type NavItem = { to: string; label: string; end: boolean; icon: IconName }
 
@@ -27,37 +28,49 @@ export function Shell() {
     ? { to: "/escola/configuracao", label: "Configurações", end: false, icon: "gear" }
     : null
 
+  const who = session.nome || session.email || ""
+  const initials =
+    who
+      .split(/[\s@.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("") || "?"
+  const roleLabel = admin ? "Administração" : professor ? "Professor" : "Aluno"
+
   return (
     <div className="shell">
       <nav className="nav">
-        <NavLink to="/" className="brand" end>
-          Vozear
+        <NavLink to="/" className="brand" end aria-label="Vozear">
+          <LogoMark size={34} />
+          <span className="brand-name">Vozear</span>
         </NavLink>
+        <p className="nav-label">Menu</p>
         <div className="nav-links">
           {links.map((link) => (
             <NavLink key={link.to} to={link.to} end={link.end}>
               <NavIcon name={link.icon} />
-              {link.label}
+              <span className="nav-text">{link.label}</span>
             </NavLink>
           ))}
-        </div>
-        <div className="nav-art" aria-hidden="true">
-          <svg viewBox="0 0 260 180" preserveAspectRatio="xMinYMid slice">
-            <path d="M-30 48C30 18 78 108 150 78s92-62 150 8" />
-            <path d="M-24 108C40 72 92 156 168 124s88-58 140 18" />
-          </svg>
         </div>
         <div className="nav-foot">
           {settings ? (
             <NavLink to={settings.to} end={settings.end}>
               <NavIcon name={settings.icon} />
-              {settings.label}
+              <span className="nav-text">{settings.label}</span>
             </NavLink>
           ) : null}
           <div className="nav-user">
-            <span>{session.nome || session.email}</span>
-            <button type="button" onClick={() => session.signOut()}>
-              Sair
+            <span className="avatar" aria-hidden="true">
+              {initials}
+            </span>
+            <span className="nav-user-text">
+              <strong>{who}</strong>
+              <small>{roleLabel}</small>
+            </span>
+            <button type="button" aria-label="Sair" title="Sair" onClick={() => session.signOut()}>
+              <NavIcon name="exit" />
             </button>
           </div>
         </div>
@@ -112,6 +125,12 @@ function NavIcon({ name }: { name: IconName }) {
       <>
         <circle cx="12" cy="12" r="3" />
         <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6.1 6.1l1.6 1.6M16.3 16.3l1.6 1.6M17.9 6.1l-1.6 1.6M7.7 16.3l-1.6 1.6" />
+      </>
+    ),
+    exit: (
+      <>
+        <path d="M10 4.5H6.5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1H10" />
+        <path d="M14.5 8.5 18 12l-3.5 3.5M18 12H9.5" />
       </>
     ),
   }
