@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useSession } from "../../auth/session.tsx"
-import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
+import { WeekCalendar, WeekNav, hourMarks, type CellPaint } from "../../components/WeekCalendar.tsx"
+import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
 import { loadAulas, loadInstrumentos, nomesPorId } from "../../data/api.ts"
-import { addDays, formatWhen, mondayOf, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
+import { addDays, agendaStartMinute, dateOfWeekday, mondayOf, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
+import { SITUACAO_AULA } from "../../lib/format.ts"
 import type { Aula, Instrumento } from "../../types.ts"
 
 export function StudentAgendaPage() {
   const session = useSession()
+  const navigate = useNavigate()
   const [cursor, setCursor] = useState(saoPauloDate())
+  const [anchorMinute, setAnchorMinute] = useState(agendaStartMinute)
   const [aulas, setAulas] = useState<Aula[]>([])
   const [instrumentos, setInstrumentos] = useState<Map<string, Instrumento>>(new Map())
   const [nomes, setNomes] = useState<Map<string, string>>(new Map())
@@ -44,35 +48,56 @@ export function StudentAgendaPage() {
     }
   }, [session.userId, monday])
 
+  const paints: CellPaint[] = []
+  for (const minute of hourMarks()) {
+    for (const day of [1, 2, 3, 4, 5, 6, 0]) {
+      const date = dateOfWeekday(monday, day)
+      const hits = aulas.filter((item) => {
+        const clock = saoPauloClock(item.inicio)
+        return clock.date === date && clock.minute >= minute && clock.minute < minute + 60
+      })
+      const aula = hits.find((item) => item.situacao !== "cancelada" && item.situacao !== "remarcada") ?? hits[0]
+      if (!aula) continue
+      const status = aula.situacao === "prevista" ? null : SITUACAO_AULA[aula.situacao]
+      paints.push({
+        day,
+        minute,
+        kind: "aula",
+        aulaId: aula.id,
+        title: instrumentos.get(aula.instrumento_id)?.nome ?? "Aula",
+        detail: [nomes.get(aula.professor_id) ?? "Professor", status].filter(Boolean).join(" · "),
+      })
+    }
+  }
+
   return (
     <Page
       title="Sua agenda"
-      lede="Cada aula abre o recado e os links deixados pelo professor."
+      lede="A mesma semana da escola. Toque uma aula para abrir o recado."
       action={
-        <div className="week-nav">
-          <button type="button" onClick={() => setCursor(addDays(monday, -7))}>
-            Semana anterior
-          </button>
-          <button type="button" onClick={() => setCursor(addDays(monday, 7))}>
-            Próxima semana
-          </button>
-        </div>
+        <WeekNav
+          monday={monday}
+          onShift={(days) => {
+            setCursor(addDays(monday, days))
+            setAnchorMinute(16 * 60)
+          }}
+          onToday={() => {
+            setCursor(saoPauloDate())
+            setAnchorMinute(agendaStartMinute())
+          }}
+        />
       }
     >
       <ErrorNote>{error}</ErrorNote>
       {aulas.length === 0 ? <Empty>Nenhuma aula nesta semana.</Empty> : null}
-      <ul className="lesson-list">
-        {aulas.map((aula) => (
-          <li key={aula.id}>
-            <Link to={`/aluno/aulas/${aula.id}`}>
-              <strong>{formatWhen(aula.inicio)}</strong>
-              <span>{instrumentos.get(aula.instrumento_id)?.nome ?? "Aula"}</span>
-              <span>{nomes.get(aula.professor_id) ?? "Professor"}</span>
-              <StatusBadge value={aula.situacao} />
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <WeekCalendar
+        monday={monday}
+        cells={paints}
+        anchorMinute={anchorMinute}
+        readOnly
+        label="Sua semana"
+        onOpenLesson={(aulaId) => navigate(`/aluno/aulas/${aulaId}`)}
+      />
     </Page>
   )
 }

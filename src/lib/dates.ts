@@ -72,6 +72,39 @@ export function formatWhen(iso: string) {
   }).format(new Date(iso))
 }
 
+export function saoPauloHour(date = new Date()) {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(date)
+  return Number(hour)
+}
+
+export function agendaStartMinute(date = new Date()) {
+  const hour = saoPauloHour(date)
+  if (hour < 16) return 16 * 60
+  if (hour > 21) return 21 * 60
+  return hour * 60
+}
+
+function monthName(isoDate: string, width: "long" | "short") {
+  const [year, month, day] = isoDate.split("-").map(Number)
+  return new Intl.DateTimeFormat("pt-BR", { month: width, timeZone: "UTC" })
+    .format(new Date(Date.UTC(year, month - 1, day)))
+    .replace(".", "")
+}
+
+export function formatWeekSpan(monday: string) {
+  const sunday = addDays(monday, 6)
+  const startDay = Number(monday.slice(8))
+  const endDay = Number(sunday.slice(8))
+  if (monday.slice(0, 7) === sunday.slice(0, 7)) {
+    return `${startDay}–${endDay} de ${monthName(monday, "long")}`
+  }
+  return `${startDay} de ${monthName(monday, "short")} – ${endDay} de ${monthName(sunday, "short")}`
+}
+
 export function formatDate(isoDate: string) {
   const [year, month, day] = isoDate.split("-").map(Number)
   return new Intl.DateTimeFormat("pt-BR", {

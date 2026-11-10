@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useSession } from "../../auth/session.tsx"
-import { WeekCalendar, hourMarks, type CellPaint, type Slot } from "../../components/WeekCalendar.tsx"
+import { WeekCalendar, WeekNav, hourMarks, type CellPaint, type Slot } from "../../components/WeekCalendar.tsx"
 import { ErrorNote, Page } from "../../components/ui.tsx"
 import { loadAulas, loadHorarios, loadInstrumentos, loadMatriculas, loadPessoas, nomesPorId } from "../../data/api.ts"
-import { DIAS, addDays, dateOfWeekday, formatMinute, mondayOf, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
+import { DIAS, addDays, agendaStartMinute, dateOfWeekday, formatMinute, mondayOf, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
 import { client } from "../../lib/supabase.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
@@ -31,6 +31,8 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   const [aulas, setAulas] = useState<Aula[]>([])
   const [labels, setLabels] = useState<Map<string, string>>(new Map())
   const [selection, setSelection] = useState<Slot[] | null>(null)
+  const [anchorMinute, setAnchorMinute] = useState(agendaStartMinute)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const monday = mondayOf(cursor)
   const selectedTeacher = mode === "professor" ? session.userId ?? "" : teacherId
@@ -109,14 +111,14 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
           detail: instrumentos.find((item) => item.id === aula.instrumento_id)?.nome,
         })
       } else if (horario?.uso === "bloqueado") {
-        paints.push({ day, minute, kind: "bloqueado", title: "Bloqueado" })
+        paints.push({ day, minute, kind: "bloqueado" })
       } else if (horario) {
         paints.push({
           day,
           minute,
           kind: "disponivel",
           title: matricula ? (names.get(matricula.aluno_id) ?? "Aluno") : "Livre",
-          detail: matricula ? instrumentos.find((item) => item.id === matricula.instrumento_id)?.nome : "Disponível",
+          detail: matricula ? instrumentos.find((item) => item.id === matricula.instrumento_id)?.nome : undefined,
         })
       }
     }
@@ -132,15 +134,24 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   const teacher = teachers.find((person) => person.id === selectedTeacher)
   const options = instrumentos.filter((item) => item.ativo && (teacher ? teacher.instrumentos.includes(item.id) : true))
 
+  function exactHorario(slot: Slot) {
+    return active.find((item) => item.dia_semana === slot.day && item.inicio_minuto === slot.minute && item.duracao_minutos === 60)
+  }
+
+  const selectedHorarios = (selection ?? []).flatMap((slot) => {
+    const exact = exactHorario(slot)
+    return exact ? [exact] : []
+  })
+  const enrolledSelection = selectedHorarios.some((item) => matriculas.some((matricula) => matricula.horario_id === item.id))
+
   async function mark(uso: UsoHorario) {
-    if (!selection || !selectedTeacher) return
+    if (!selection || !selectedTeacher || busy) return
     setError(null)
+    setBusy(true)
     const inserts: { professor_id: string; dia_semana: number; inicio_minuto: number; duracao_minutos: number; uso: UsoHorario }[] = []
     const updates: string[] = []
     for (const slot of selection) {
-      const exact = active.find(
-        (item) => item.dia_semana === slot.day && item.inicio_minuto === slot.minute && item.duracao_minutos === 60,
-      )
+      const exact = exactHorario(slot)
       if (exact) {
         if (exact.uso !== uso) updates.push(exact.id)
         continue
@@ -150,6 +161,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       )
       if (overlap) {
         setError("Esse intervalo já tem um horário com outra duração.")
+        setBusy(false)
         return
       }
       inserts.push({
@@ -164,6 +176,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       const { error: insertError } = await client().from("horarios").insert(inserts)
       if (insertError) {
         setError(humanError(insertError))
+        setBusy(false)
         return
       }
     }
@@ -171,17 +184,35 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       const { error: updateError } = await client().from("horarios").update({ uso }).eq("id", id)
       if (updateError) {
         setError(humanError(updateError))
+        setBusy(false)
         await reload()
         return
       }
     }
+    const keep = school && uso === "disponivel" && selection.length === 1
+    if (!keep) setSelection(null)
+    await reload()
+    setBusy(false)
+  }
+
+  async function clearSelection() {
+    if (!selection || busy || enrolledSelection || selectedHorarios.length === 0) return
+    setError(null)
+    setBusy(true)
+    const { error: deleteError } = await client().from("horarios").delete().in("id", selectedHorarios.map((item) => item.id))
+    if (deleteError) {
+      setError(humanError(deleteError))
+      setBusy(false)
+      return
+    }
     setSelection(null)
     await reload()
+    setBusy(false)
   }
 
   async function enroll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!singleHorario) return
+    if (!singleHorario || busy) return
     const form = new FormData(event.currentTarget)
     const alunoId = String(form.get("aluno") ?? "")
     const instrumentoId = String(form.get("instrumento") ?? "")
@@ -192,6 +223,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       return
     }
     setError(null)
+    setBusy(true)
     const { data, error: insertError } = await client()
       .from("matriculas")
       .insert({
@@ -206,6 +238,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       .single()
     if (insertError || !data) {
       setError(humanError(insertError))
+      setBusy(false)
       return
     }
     const { error: generateError } = await client().rpc("gerar_aulas", {
@@ -215,20 +248,28 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
     if (generateError) setError(humanError(generateError))
     setSelection(null)
     await reload()
+    setBusy(false)
   }
 
   return (
     <Page
       title={school ? "Agenda da escola" : "Minha semana"}
-      lede="Arraste no calendário para escolher os horários. Cada aula dura 1 hora."
+      lede="Arraste na horizontal para marcar horários de 1 hora."
       action={
-        <div className="week-nav">
-          <button type="button" onClick={() => setCursor(addDays(monday, -7))}>Semana anterior</button>
-          <button type="button" onClick={() => setCursor(addDays(monday, 7))}>Próxima semana</button>
-        </div>
+        <WeekNav
+          monday={monday}
+          onShift={(days) => {
+            setCursor(addDays(monday, days))
+            setAnchorMinute(16 * 60)
+          }}
+          onToday={() => {
+            setCursor(saoPauloDate())
+            setAnchorMinute(agendaStartMinute())
+          }}
+        />
       }
     >
-      <ErrorNote>{error}</ErrorNote>
+      {selection ? null : <ErrorNote>{error}</ErrorNote>}
       {school ? (
         <label>
           Professor
@@ -246,15 +287,9 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
         </label>
       ) : null}
 
-      <WeekCalendar
-        monday={monday}
-        cells={paints}
-        onCommit={setSelection}
-        onOpenLesson={(aulaId) => navigate(`${school ? "/escola" : "/professor"}/aulas/${aulaId}`)}
-      />
-
       {selection ? (
-        <section className="card stack cal-sheet" role="dialog" aria-label="Horários selecionados">
+        <section className="card stack cal-sheet" role="dialog" aria-label="Horários selecionados" aria-busy={busy}>
+          <ErrorNote>{error}</ErrorNote>
           <div className="row spread">
             <strong>{describeSlots(selection)}</strong>
             <button className="btn ghost" type="button" onClick={() => setSelection(null)}>Cancelar</button>
@@ -263,9 +298,15 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
             {selection.length === 1 ? "1 horário de 1 hora" : `${selection.length} horários de 1 hora`}
           </p>
           <div className="row">
-            <button className="btn" type="button" onClick={() => mark("disponivel")}>Disponível para aulas</button>
-            <button className="btn secondary" type="button" onClick={() => mark("bloqueado")}>Bloqueado</button>
+            <button className="btn" type="button" disabled={busy} onClick={() => mark("disponivel")}>
+              {busy ? "Salvando…" : "Disponível para aulas"}
+            </button>
+            <button className="btn secondary" type="button" disabled={busy} onClick={() => mark("bloqueado")}>Bloqueado</button>
+            {selectedHorarios.length > 0 && !enrolledSelection ? (
+              <button className="btn danger" type="button" disabled={busy} onClick={() => clearSelection()}>Tirar da agenda</button>
+            ) : null}
           </div>
+          {enrolledSelection ? <p className="muted">Encerre a matrícula antes de tirar este horário da agenda.</p> : null}
           {singleMatricula ? (
             <p>
               {names.get(singleMatricula.aluno_id) ?? "Aluno"} ·{" "}
@@ -277,7 +318,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
             <form className="row" onSubmit={enroll}>
               <label>
                 Aluno
-                <select name="aluno" required defaultValue="">
+                <select name="aluno" required defaultValue="" disabled={busy}>
                   <option value="" disabled>Escolher</option>
                   {students.map((person) => (
                     <option key={person.id} value={person.id}>{person.nome}</option>
@@ -286,7 +327,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
               </label>
               <label>
                 Instrumento
-                <select name="instrumento" required defaultValue={options[0]?.id ?? ""}>
+                <select name="instrumento" required defaultValue={options[0]?.id ?? ""} disabled={busy}>
                   {options.map((item) => (
                     <option key={item.id} value={item.id}>{item.nome}</option>
                   ))}
@@ -294,17 +335,31 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
               </label>
               <label>
                 Mensalidade
-                <input name="valor" defaultValue={options[0] ? (options[0].valor_mensal_centavos / 100).toFixed(2) : ""} required />
+                <input name="valor" defaultValue={options[0] ? (options[0].valor_mensal_centavos / 100).toFixed(2) : ""} required disabled={busy} />
               </label>
               <label>
                 Começa em
-                <input name="inicio" type="date" defaultValue={saoPauloDate()} required />
+                <input name="inicio" type="date" defaultValue={saoPauloDate()} required disabled={busy} />
               </label>
-              <button className="btn" type="submit">Matricular</button>
+              <button className="btn" type="submit" disabled={busy}>{busy ? "Salvando…" : "Matricular"}</button>
             </form>
           ) : null}
         </section>
       ) : null}
+
+      <div className="cal-legend" aria-hidden="true">
+        <span><i className="swatch disponivel" /> Livre</span>
+        <span><i className="swatch bloqueado" /> Bloqueado</span>
+        <span><i className="swatch aula" /> Aula</span>
+      </div>
+      <WeekCalendar
+        monday={monday}
+        cells={paints}
+        anchorMinute={anchorMinute}
+        label={school ? "Agenda da escola" : "Semana do professor"}
+        onCommit={setSelection}
+        onOpenLesson={(aulaId) => navigate(`${school ? "/escola" : "/professor"}/aulas/${aulaId}`)}
+      />
     </Page>
   )
 }
