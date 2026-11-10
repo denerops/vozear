@@ -43,7 +43,6 @@ export function BillingPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
   const [view, setView] = useState<View>("todas")
   const [search, setSearch] = useState("")
   const [pixId, setPixId] = useState<string | null>(null)
@@ -64,7 +63,17 @@ export function BillingPage() {
 
   useEffect(() => {
     let alive = true
-    reload()
+    setLoading(true)
+    async function openMonth() {
+      if (month === currentMonth()) {
+        const { error: generateError } = await client().rpc("gerar_mensalidades", {
+          p_competencia: `${month}-01`,
+        })
+        if (generateError) throw generateError
+      }
+      if (alive) await reload()
+    }
+    openMonth()
       .catch((reason: { message?: string }) => {
         if (alive) setError(humanError(reason))
       })
@@ -74,7 +83,7 @@ export function BillingPage() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [month])
 
   const pessoas = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
   const monthCharges = charges.filter((item) => item.competencia.startsWith(month))
@@ -100,23 +109,6 @@ export function BillingPage() {
       return rank(a) - rank(b) || a.vencimento.localeCompare(b.vencimento) || (pessoas.get(a.aluno_id)?.nome ?? "").localeCompare(pessoas.get(b.aluno_id)?.nome ?? "", "pt-BR")
     })
 
-  async function generate() {
-    setBusy(true)
-    setError(null)
-    setInfo(null)
-    const { data, error: generateError } = await client().rpc("gerar_mensalidades", {
-      p_competencia: `${month}-01`,
-    })
-    setBusy(false)
-    if (generateError) {
-      setError(humanError(generateError))
-      return
-    }
-    const count = Number(data ?? 0)
-    setInfo(count === 0 ? "Nenhuma mensalidade nova neste mês." : count === 1 ? "1 mensalidade nova." : `${count} mensalidades novas.`)
-    await reload()
-  }
-
   async function markPaid(id: string) {
     setError(null)
     setInfo(null)
@@ -132,7 +124,9 @@ export function BillingPage() {
   const lede = loading
     ? "Carregando…"
     : monthCharges.length === 0
-      ? "Nada gerado neste mês."
+      ? month === currentMonth()
+        ? "Nenhuma matrícula ativa."
+        : "Nada neste mês."
       : `${open.length} em aberto · ${formatMoney(openSum)}`
 
   return (
@@ -147,9 +141,6 @@ export function BillingPage() {
           <strong>{monthTitle(month)}</strong>
           <button type="button" aria-label="Próximo mês" onClick={() => setMonth(shiftMonth(month, 1))}>
             ›
-          </button>
-          <button className="btn" type="button" onClick={() => void generate()} disabled={busy}>
-            {busy ? "Gerando…" : "Gerar mês"}
           </button>
         </div>
       }
@@ -187,7 +178,9 @@ export function BillingPage() {
         </div>
       </div>
       {loading ? null : monthCharges.length === 0 ? (
-        <Empty>Nada neste mês. Gere as mensalidades das matrículas ativas.</Empty>
+        <Empty>
+          {month === currentMonth() ? "Nenhuma matrícula ativa para cobrar." : "Nenhuma mensalidade neste mês."}
+        </Empty>
       ) : visible.length === 0 ? (
         <Empty>Nenhuma mensalidade encontrada.</Empty>
       ) : (
