@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { useSession } from "../../auth/session.tsx"
 import { WeekCalendar, WeekNav, hourMarks, type CellPaint, type Slot } from "../../components/WeekCalendar.tsx"
@@ -210,6 +210,21 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
     setBusy(false)
   }
 
+  function chooseTeacher(id: string) {
+    setSelection(null)
+    setTeacherId(id)
+  }
+
+  function moveTeacher(event: KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key) || teachers.length === 0) return
+    event.preventDefault()
+    const index = Math.max(0, teachers.findIndex((person) => person.id === selectedTeacher))
+    const delta = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1
+    const next = teachers[(index + delta + teachers.length) % teachers.length]
+    chooseTeacher(next.id)
+    event.currentTarget.querySelector<HTMLButtonElement>(`[data-id="${next.id}"]`)?.focus()
+  }
+
   async function enroll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!singleHorario || busy) return
@@ -271,20 +286,37 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
     >
       {selection ? null : <ErrorNote>{error}</ErrorNote>}
       {school ? (
-        <label>
-          Professor
-          <select
-            value={selectedTeacher}
-            onChange={(event) => {
-              setSelection(null)
-              setTeacherId(event.target.value)
-            }}
+        <div className="teacher-pick">
+          <p className="eyebrow">Professor</p>
+          <div
+            role="radiogroup"
+            aria-label="Professor"
+            onKeyDown={(event) => moveTeacher(event)}
           >
-            {teachers.map((person) => (
-              <option key={person.id} value={person.id}>{person.nome}</option>
-            ))}
-          </select>
-        </label>
+            {teachers.map((person) => {
+              const checked = person.id === selectedTeacher
+              const instruments = instrumentos
+                .filter((item) => person.instrumentos.includes(item.id))
+                .map((item) => item.nome)
+                .join(" · ")
+              return (
+                <button
+                  key={person.id}
+                  type="button"
+                  role="radio"
+                  data-id={person.id}
+                  aria-checked={checked}
+                  tabIndex={checked ? 0 : -1}
+                  className="teacher-chip"
+                  onClick={() => chooseTeacher(person.id)}
+                >
+                  <strong>{person.nome}</strong>
+                  {instruments ? <span>{instruments}</span> : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       ) : null}
 
       {selection ? (

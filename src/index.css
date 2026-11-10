@@ -137,6 +137,27 @@ textarea { resize: vertical; }
 .pix code { display: block; max-width: 100%; overflow-wrap: anywhere; font-size: 0.75rem; color: var(--muted); }
 .page-loading { padding: 2rem; }
 .page:has(.cal-scroll) h1 { font-size: clamp(1.7rem, 3vw, 2.3rem); }
+.teacher-pick { display: grid; gap: 0.45rem; }
+.teacher-pick .eyebrow { margin: 0; }
+.teacher-pick [role="radiogroup"] { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.teacher-chip {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 8.5rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper-2);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.teacher-chip strong { font-family: var(--serif); font-size: 1.15rem; font-weight: 560; letter-spacing: -0.03em; }
+.teacher-chip span { color: var(--muted); font-size: 0.78rem; }
+.teacher-chip:hover { border-color: var(--ink); }
+.teacher-chip:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.teacher-chip[aria-checked="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.teacher-chip[aria-checked="true"] span { color: #d9d0c0; }
 .week-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem; }
 .week-label { color: var(--ink); font-weight: 600; padding: 0.45rem 0.55rem; }
 .week-nav button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
