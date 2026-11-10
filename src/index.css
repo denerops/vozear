@@ -492,3 +492,70 @@ textarea { resize: vertical; }
   letter-spacing: -0.03em;
 }
 .pay-card.is-paid .pay-amount { color: var(--ink); }
+.settings-card { display: grid; gap: 1.2rem; }
+.settings-copy { display: grid; gap: 0.8rem; align-content: start; min-width: 0; }
+.settings-copy h2 { margin: 0; }
+.settings-preview {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  justify-items: start;
+  background: var(--secondary);
+  border-radius: 18px;
+  padding: 1rem;
+  min-width: 0;
+}
+.settings-preview .pix img { width: 150px; height: 150px; }
+.settings-preview .eyebrow { margin: 0; color: var(--muted); }
+@media (min-width: 760px) {
+  .settings-card { grid-template-columns: minmax(0, 1fr) 240px; align-items: start; }
+}
+.field-hint { margin: 0; color: var(--muted); font-size: 0.84rem; }
+.field-hint.is-error { color: var(--burgundy); font-weight: 650; }
+.field-hint.is-warn { color: #8a5a10; }
+.key-kind {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: #e5f0e4;
+  color: var(--ok);
+  font-weight: 650;
+}
+.settings-day { max-width: 12rem; }
+.wa-bubble {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fffdfb;
+  border-radius: 14px 14px 14px 4px;
+  padding: 0.75rem 0.9rem;
+  color: var(--ink);
+  font-size: 0.9rem;
+  box-shadow: 0 1px 0 rgba(36, 16, 15, 0.08);
+}
+.save-bar {
+  position: sticky;
+  bottom: 0.8rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--card);
+  border-radius: 18px;
+  padding: 0.7rem 0.9rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.save-bar span { flex: 1; font-weight: 650; color: var(--ink); }
+.money-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--secondary);
+  border-radius: 14px;
+  padding-left: 0.8rem;
+  color: var(--muted);
+}
+.money-field input { background: transparent; border: 0; flex: 1; min-width: 0; }
+.settings-instrument.is-off { opacity: 0.75; }
+.settings-instrument .row { align-items: end; }

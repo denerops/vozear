@@ -12,6 +12,10 @@ function semAcento(valor: string) {
     .trim()
 }
 
+export function pixLabel(valor: string, max: number) {
+  return semAcento(valor).slice(0, max)
+}
+
 function crc16(texto: string) {
   let crc = 0xffff
   for (const byte of new TextEncoder().encode(texto)) {
