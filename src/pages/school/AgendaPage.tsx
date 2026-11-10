@@ -1,25 +1,26 @@
 import { useEffect, useState, type FormEvent } from "react"
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useSession } from "../../auth/session.tsx"
-import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
+import { WeekCalendar, hourMarks, type CellPaint, type Slot } from "../../components/WeekCalendar.tsx"
+import { ErrorNote, Page } from "../../components/ui.tsx"
 import { loadAulas, loadHorarios, loadInstrumentos, loadMatriculas, loadPessoas, nomesPorId } from "../../data/api.ts"
-import {
-  DIAS,
-  addDays,
-  formatMinute,
-  formatWhen,
-  mondayOf,
-  saoPauloDate,
-  saoPauloTimestamp,
-  timeToMinute,
-} from "../../lib/dates.ts"
+import { DIAS, addDays, dateOfWeekday, formatMinute, mondayOf, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
 import { client } from "../../lib/supabase.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
-import type { Aula, Horario, Instrumento, Matricula, Pessoa } from "../../types.ts"
+import type { Aula, Horario, Instrumento, Matricula, Pessoa, UsoHorario } from "../../types.ts"
+
+function describeSlots(slots: Slot[]) {
+  const days = [...new Set(slots.map((slot) => slot.day))].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+  const minutes = slots.map((slot) => slot.minute)
+  const from = Math.min(...minutes)
+  const until = Math.max(...minutes) + 60
+  return `${days.map((day) => DIAS[day]).join(", ")} · ${formatMinute(from)}–${formatMinute(until)}`
+}
 
 export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   const session = useSession()
+  const navigate = useNavigate()
   const [cursor, setCursor] = useState(saoPauloDate())
   const [teacherId, setTeacherId] = useState("")
   const [teachers, setTeachers] = useState<Pessoa[]>([])
@@ -29,10 +30,8 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   const [matriculas, setMatriculas] = useState<Matricula[]>([])
   const [aulas, setAulas] = useState<Aula[]>([])
   const [labels, setLabels] = useState<Map<string, string>>(new Map())
+  const [selection, setSelection] = useState<Slot[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [dia, setDia] = useState(2)
-  const [hora, setHora] = useState("19:00")
-  const [duracao, setDuracao] = useState(50)
   const monday = mondayOf(cursor)
   const selectedTeacher = mode === "professor" ? session.userId ?? "" : teacherId
   const school = mode === "escola"
@@ -84,22 +83,105 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   ])
   if (session.userId && session.nome) names.set(session.userId, session.nome)
 
-  async function createSlot(event: FormEvent) {
-    event.preventDefault()
-    if (!selectedTeacher) return
-    setError(null)
-    const { error: insertError } = await client().from("horarios").insert({
-      professor_id: selectedTeacher,
-      dia_semana: dia,
-      inicio_minuto: timeToMinute(hora),
-      duracao_minutos: duracao,
-    })
-    if (insertError) setError(humanError(insertError))
-    else await reload()
+  const active = horarios.filter((item) => item.ativo && item.professor_id === selectedTeacher)
+  const paints: CellPaint[] = []
+  for (const minute of hourMarks()) {
+    for (const day of [1, 2, 3, 4, 5, 6, 0]) {
+      const date = dateOfWeekday(monday, day)
+      const aula = aulas.find((item) => {
+        if (item.situacao === "cancelada") return false
+        const clock = saoPauloClock(item.inicio)
+        return clock.date === date && clock.minute >= minute && clock.minute < minute + 60
+      })
+      const horario = active.find(
+        (item) => item.dia_semana === day && item.inicio_minuto <= minute && minute < item.inicio_minuto + item.duracao_minutos,
+      )
+      const matricula = horario
+        ? matriculas.find((item) => item.horario_id === horario.id && item.situacao === "ativa")
+        : undefined
+      if (aula) {
+        paints.push({
+          day,
+          minute,
+          kind: "aula",
+          aulaId: aula.id,
+          title: names.get(aula.aluno_id) ?? "Aluno",
+          detail: instrumentos.find((item) => item.id === aula.instrumento_id)?.nome,
+        })
+      } else if (horario?.uso === "bloqueado") {
+        paints.push({ day, minute, kind: "bloqueado", title: "Bloqueado" })
+      } else if (horario) {
+        paints.push({
+          day,
+          minute,
+          kind: "disponivel",
+          title: matricula ? (names.get(matricula.aluno_id) ?? "Aluno") : "Livre",
+          detail: matricula ? instrumentos.find((item) => item.id === matricula.instrumento_id)?.nome : "Disponível",
+        })
+      }
+    }
   }
 
-  async function enroll(event: FormEvent<HTMLFormElement>, horario: Horario) {
+  const single = selection?.length === 1 ? selection[0] : null
+  const singleHorario = single
+    ? active.find((item) => item.dia_semana === single.day && item.inicio_minuto === single.minute && item.duracao_minutos === 60)
+    : undefined
+  const singleMatricula = singleHorario
+    ? matriculas.find((item) => item.horario_id === singleHorario.id && item.situacao === "ativa")
+    : undefined
+  const teacher = teachers.find((person) => person.id === selectedTeacher)
+  const options = instrumentos.filter((item) => item.ativo && (teacher ? teacher.instrumentos.includes(item.id) : true))
+
+  async function mark(uso: UsoHorario) {
+    if (!selection || !selectedTeacher) return
+    setError(null)
+    const inserts: { professor_id: string; dia_semana: number; inicio_minuto: number; duracao_minutos: number; uso: UsoHorario }[] = []
+    const updates: string[] = []
+    for (const slot of selection) {
+      const exact = active.find(
+        (item) => item.dia_semana === slot.day && item.inicio_minuto === slot.minute && item.duracao_minutos === 60,
+      )
+      if (exact) {
+        if (exact.uso !== uso) updates.push(exact.id)
+        continue
+      }
+      const overlap = active.some(
+        (item) => item.dia_semana === slot.day && item.inicio_minuto < slot.minute + 60 && slot.minute < item.inicio_minuto + item.duracao_minutos,
+      )
+      if (overlap) {
+        setError("Esse intervalo já tem um horário com outra duração.")
+        return
+      }
+      inserts.push({
+        professor_id: selectedTeacher,
+        dia_semana: slot.day,
+        inicio_minuto: slot.minute,
+        duracao_minutos: 60,
+        uso,
+      })
+    }
+    if (inserts.length > 0) {
+      const { error: insertError } = await client().from("horarios").insert(inserts)
+      if (insertError) {
+        setError(humanError(insertError))
+        return
+      }
+    }
+    for (const id of updates) {
+      const { error: updateError } = await client().from("horarios").update({ uso }).eq("id", id)
+      if (updateError) {
+        setError(humanError(updateError))
+        await reload()
+        return
+      }
+    }
+    setSelection(null)
+    await reload()
+  }
+
+  async function enroll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!singleHorario) return
     const form = new FormData(event.currentTarget)
     const alunoId = String(form.get("aluno") ?? "")
     const instrumentoId = String(form.get("instrumento") ?? "")
@@ -114,9 +196,9 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       .from("matriculas")
       .insert({
         aluno_id: alunoId,
-        professor_id: horario.professor_id,
+        professor_id: singleHorario.professor_id,
         instrumento_id: instrumentoId,
-        horario_id: horario.id,
+        horario_id: singleHorario.id,
         valor_mensal_centavos: cents,
         inicio_em: inicio,
       })
@@ -131,15 +213,14 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       p_ate: addDays(saoPauloDate(), 84),
     })
     if (generateError) setError(humanError(generateError))
+    setSelection(null)
     await reload()
   }
-
-  const teacher = teachers.find((person) => person.id === selectedTeacher)
 
   return (
     <Page
       title={school ? "Agenda da escola" : "Minha semana"}
-      lede="Um horário recebe um aluno. Remarcar muda só aquela data."
+      lede="Arraste no calendário para escolher os horários. Cada aula dura 1 hora."
       action={
         <div className="week-nav">
           <button type="button" onClick={() => setCursor(addDays(monday, -7))}>Semana anterior</button>
@@ -151,7 +232,13 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       {school ? (
         <label>
           Professor
-          <select value={selectedTeacher} onChange={(event) => setTeacherId(event.target.value)}>
+          <select
+            value={selectedTeacher}
+            onChange={(event) => {
+              setSelection(null)
+              setTeacherId(event.target.value)
+            }}
+          >
             {teachers.map((person) => (
               <option key={person.id} value={person.id}>{person.nome}</option>
             ))}
@@ -159,141 +246,65 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
         </label>
       ) : null}
 
-      <form className="card row" onSubmit={createSlot}>
-        <label>
-          Dia
-          <select value={dia} onChange={(event) => setDia(Number(event.target.value))}>
-            {DIAS.map((label, index) => (
-              <option key={label} value={index}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Início
-          <input type="time" value={hora} onChange={(event) => setHora(event.target.value)} required />
-        </label>
-        <label>
-          Duração
-          <select value={duracao} onChange={(event) => setDuracao(Number(event.target.value))}>
-            {[30, 45, 50, 60].map((minutes) => (
-              <option key={minutes} value={minutes}>{minutes} min</option>
-            ))}
-          </select>
-        </label>
-        <button className="btn" type="submit" disabled={!selectedTeacher}>Abrir horário</button>
-      </form>
+      <WeekCalendar
+        monday={monday}
+        cells={paints}
+        onCommit={setSelection}
+        onOpenLesson={(aulaId) => navigate(`${school ? "/escola" : "/professor"}/aulas/${aulaId}`)}
+      />
 
-      <section className="stack">
-        <h2>Aulas da semana</h2>
-        {aulas.length === 0 ? <Empty>Nenhuma aula gerada nesta semana.</Empty> : null}
-        <ul className="lesson-list">
-          {aulas.map((aula) => (
-            <li key={aula.id}>
-              <Link to={`${school ? "/escola" : "/professor"}/aulas/${aula.id}`}>
-                <strong>{formatWhen(aula.inicio)}</strong>
-                <span>{names.get(aula.aluno_id) ?? "Aluno"}</span>
-                <span>{instrumentos.find((item) => item.id === aula.instrumento_id)?.nome}</span>
-                <StatusBadge value={aula.situacao} />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="stack">
-        <h2>Horários semanais</h2>
-        {horarios.length === 0 ? <Empty>Nenhum horário aberto.</Empty> : null}
-        {horarios.map((horario) => {
-          const matricula = matriculas.find((item) => item.horario_id === horario.id && item.situacao === "ativa")
-          const options = instrumentos.filter(
-            (item) => item.ativo && (teacher ? teacher.instrumentos.includes(item.id) : item.id === matricula?.instrumento_id),
-          )
-          const defaultPrice = options[0] ? (options[0].valor_mensal_centavos / 100).toFixed(2) : ""
-          return (
-            <article key={horario.id} className="card stack">
-              <div className="row spread">
-                <strong>
-                  {DIAS[horario.dia_semana]} {formatMinute(horario.inicio_minuto)} · {horario.duracao_minutos} min
-                </strong>
-                <span className="muted">{horario.ativo ? "Ativo" : "Inativo"}</span>
-              </div>
-              {matricula ? (
-                <p>
-                  {names.get(matricula.aluno_id) ?? "Aluno"} ·{" "}
-                  {instrumentos.find((item) => item.id === matricula.instrumento_id)?.nome} ·{" "}
-                  {formatMoney(matricula.valor_mensal_centavos)}
-                </p>
-              ) : (
-                <p className="muted">Horário livre</p>
-              )}
-              {school && horario.ativo && !matricula ? (
-                <form className="row" onSubmit={(event) => enroll(event, horario)}>
-                  <label>
-                    Aluno
-                    <select name="aluno" required defaultValue="">
-                      <option value="" disabled>Escolher</option>
-                      {students.map((person) => (
-                        <option key={person.id} value={person.id}>{person.nome}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Instrumento
-                    <select name="instrumento" required defaultValue={options[0]?.id ?? ""}>
-                      {options.map((item) => (
-                        <option key={item.id} value={item.id}>{item.nome}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Mensalidade
-                    <input name="valor" defaultValue={defaultPrice} required />
-                  </label>
-                  <label>
-                    Começa em
-                    <input name="inicio" type="date" defaultValue={saoPauloDate()} required />
-                  </label>
-                  <button className="btn" type="submit">Matricular</button>
-                </form>
-              ) : null}
-              <div className="row">
-                {matricula ? (
-                  <button
-                    className="btn secondary"
-                    type="button"
-                    onClick={async () => {
-                      const { error: generateError } = await client().rpc("gerar_aulas", {
-                        p_matricula_id: matricula.id,
-                        p_ate: addDays(saoPauloDate(), 84),
-                      })
-                      if (generateError) setError(humanError(generateError))
-                      else await reload()
-                    }}
-                  >
-                    Gerar próximas aulas
-                  </button>
-                ) : null}
-                {horario.ativo && !matricula ? (
-                  <button
-                    className="btn ghost"
-                    type="button"
-                    onClick={async () => {
-                      const { error: updateError } = await client()
-                        .from("horarios")
-                        .update({ ativo: false })
-                        .eq("id", horario.id)
-                      if (updateError) setError(humanError(updateError))
-                      else await reload()
-                    }}
-                  >
-                    Desativar
-                  </button>
-                ) : null}
-              </div>
-            </article>
-          )
-        })}
-      </section>
+      {selection ? (
+        <section className="card stack cal-sheet" role="dialog" aria-label="Horários selecionados">
+          <div className="row spread">
+            <strong>{describeSlots(selection)}</strong>
+            <button className="btn ghost" type="button" onClick={() => setSelection(null)}>Cancelar</button>
+          </div>
+          <p className="muted">
+            {selection.length === 1 ? "1 horário de 1 hora" : `${selection.length} horários de 1 hora`}
+          </p>
+          <div className="row">
+            <button className="btn" type="button" onClick={() => mark("disponivel")}>Disponível para aulas</button>
+            <button className="btn secondary" type="button" onClick={() => mark("bloqueado")}>Bloqueado</button>
+          </div>
+          {singleMatricula ? (
+            <p>
+              {names.get(singleMatricula.aluno_id) ?? "Aluno"} ·{" "}
+              {instrumentos.find((item) => item.id === singleMatricula.instrumento_id)?.nome} ·{" "}
+              {formatMoney(singleMatricula.valor_mensal_centavos)}
+            </p>
+          ) : null}
+          {school && singleHorario?.uso === "disponivel" && !singleMatricula ? (
+            <form className="row" onSubmit={enroll}>
+              <label>
+                Aluno
+                <select name="aluno" required defaultValue="">
+                  <option value="" disabled>Escolher</option>
+                  {students.map((person) => (
+                    <option key={person.id} value={person.id}>{person.nome}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Instrumento
+                <select name="instrumento" required defaultValue={options[0]?.id ?? ""}>
+                  {options.map((item) => (
+                    <option key={item.id} value={item.id}>{item.nome}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Mensalidade
+                <input name="valor" defaultValue={options[0] ? (options[0].valor_mensal_centavos / 100).toFixed(2) : ""} required />
+              </label>
+              <label>
+                Começa em
+                <input name="inicio" type="date" defaultValue={saoPauloDate()} required />
+              </label>
+              <button className="btn" type="submit">Matricular</button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
     </Page>
   )
 }

@@ -21,7 +21,7 @@ O que se estuda na matrícula. Canto, pandeiro, percussão, violão e piano são
 _Avoid_: curso, turma
 
 **Horário**:
-Disponibilidade semanal de um professor, com dia, início e duração. Cabe uma matrícula ativa.
+Faixa semanal de uma hora na agenda do professor. Pode estar disponível para uma matrícula ou bloqueado, sem aluno.
 _Avoid_: slot, grade, turma
 
 **Matrícula**:

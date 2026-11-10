@@ -105,7 +105,7 @@ export async function loadPessoas(papel?: Papel): Promise<Pessoa[]> {
 export async function loadHorarios(professorId?: string) {
   const data = await rows<Horario>(
     "horarios",
-    "id, professor_id, dia_semana, inicio_minuto, duracao_minutos, ativo",
+    "id, professor_id, dia_semana, inicio_minuto, duracao_minutos, ativo, uso",
     (query) => (professorId ? query.eq("professor_id", professorId) : query),
   )
   return data.sort((a, b) => a.dia_semana - b.dia_semana || a.inicio_minuto - b.inicio_minuto)

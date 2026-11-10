@@ -136,6 +136,52 @@ textarea { resize: vertical; }
 .pix img { width: 180px; height: 180px; border-radius: 12px; }
 .pix code { display: block; max-width: 100%; overflow-wrap: anywhere; font-size: 0.75rem; color: var(--muted); }
 .page-loading { padding: 2rem; }
+.cal-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: var(--paper-2); }
+.cal {
+  display: grid;
+  grid-template-columns: 2.6rem repeat(7, minmax(4.6rem, 1fr));
+  min-width: 640px;
+  user-select: none;
+  touch-action: none;
+}
+.cal-row { display: contents; }
+.cal-head, .cal-corner { background: var(--paper); }
+.cal-time, .cal-corner { position: sticky; left: 0; z-index: 1; background: var(--paper); }
+.cal-head, .cal-time {
+  padding: 0.35rem 0.2rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+.cal-head { display: grid; }
+.cal-head strong { color: var(--ink); font-size: 0.95rem; }
+.cal-cell {
+  min-height: 2.7rem;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  padding: 0.15rem 0.25rem;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  overflow: hidden;
+  background: #fff;
+}
+.cal-cell strong, .cal-cell span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-cell.disponivel { background: #e7f4f2; }
+.cal-cell.bloqueado {
+  background: repeating-linear-gradient(-45deg, #f6f1e6, #f6f1e6 6px, #efe6d4 6px, #efe6d4 12px);
+  color: var(--muted);
+}
+.cal-cell.aula { background: #fff; box-shadow: inset 3px 0 0 var(--teal); }
+.cal-cell.selected { outline: 2px solid var(--teal); outline-offset: -2px; z-index: 1; }
+.cal-sheet {
+  position: fixed;
+  z-index: 5;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: 720px;
+  margin-inline: auto;
+}
 
 @media (min-width: 960px) {
   .shell { display: grid; grid-template-columns: 230px 1fr; }

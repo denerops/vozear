@@ -29,6 +29,27 @@ export function saoPauloTimestamp(date: string, time: string) {
   return `${date}T${time}:00-03:00`
 }
 
+export function dateOfWeekday(monday: string, weekday: number) {
+  const offset = weekday === 0 ? 6 : weekday - 1
+  return addDays(monday, offset)
+}
+
+export function saoPauloClock(iso: string) {
+  const date = saoPauloDate(new Date(iso))
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(iso))
+  const [year, month, day] = date.split("-").map(Number)
+  return {
+    date,
+    minute: timeToMinute(time),
+    weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
+  }
+}
+
 export function formatMinute(minute: number) {
   const hours = Math.floor(minute / 60)
   const minutes = minute % 60

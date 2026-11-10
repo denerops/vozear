@@ -26,6 +26,8 @@ export type Pessoa = {
   papeis: Papel[]
 }
 
+export type UsoHorario = "disponivel" | "bloqueado"
+
 export type Horario = {
   id: string
   professor_id: string
@@ -33,6 +35,7 @@ export type Horario = {
   inicio_minuto: number
   duracao_minutos: number
   ativo: boolean
+  uso: UsoHorario
 }
 
 export type Matricula = {
