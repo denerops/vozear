@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react"
 import { addDays } from "../../lib/dates.ts"
-import { DAY_LABEL, toneFor, weekdayOf } from "../model.ts"
+import { DAY_LABEL, weekdayOf } from "../model.ts"
 
 export type Choice = { value: string; label: string; hint?: string; dot?: string }
 

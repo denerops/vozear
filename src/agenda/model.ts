@@ -145,7 +145,7 @@ function occurrence(
 
 export function classesOn(classes: AgendaClass[], date: string) {
   return classes
-    .filter((item) => item.status !== "cancelada" && item.date === date)
+    .filter((item) => item.date === date)
     .sort((a, b) => a.startMinute - b.startMinute)
 }
 

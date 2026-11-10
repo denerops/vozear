@@ -18,7 +18,6 @@ export function CalendarGrid({
   onOpen: (id: string) => void
   onCreateAt: (date: string, startMinute: number) => void
 }) {
-  const visible = classes.filter((item) => item.status !== "cancelada")
   const { start, end } = slotBounds()
   const marks = hourMarks(start, end)
   const height = marks.length * ROW_HEIGHT
@@ -53,7 +52,7 @@ export function CalendarGrid({
       </div>
       {WEEKDAYS.map((day) => {
         const date = dateOfWeekday(monday, day)
-        const events = placedEvents(classesOn(visible, date))
+        const events = placedEvents(classesOn(classes, date))
         return (
           <div
             key={date}
