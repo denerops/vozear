@@ -1,5 +1,5 @@
 import { teachersIn, toneFor } from "../model.ts"
-import type { AgendaClass } from "../types.ts"
+import type { AgendaSeries } from "../types.ts"
 
 export function TeacherPanel({
   classes,
@@ -7,7 +7,7 @@ export function TeacherPanel({
   onSelect,
   onCreate,
 }: {
-  classes: AgendaClass[]
+  classes: AgendaSeries[]
   selected: string | null
   onSelect: (teacher: string | null) => void
   onCreate: () => void

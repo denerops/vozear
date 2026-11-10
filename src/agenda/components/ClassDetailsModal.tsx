@@ -1,20 +1,25 @@
 import { useEffect } from "react"
-import { clockLabel, formatDayTitle, toneFor } from "../model.ts"
+import { clockLabel, formatDayTitle, recurrenceLabel, toneFor } from "../model.ts"
 import type { AgendaClass } from "../types.ts"
 
 export function ClassDetailsModal({
   item,
   onClose,
-  onEdit,
+  onReschedule,
+  onEditSeries,
+  onRestore,
   onCancel,
 }: {
   item: AgendaClass
   onClose: () => void
-  onEdit: () => void
+  onReschedule: () => void
+  onEditSeries: () => void
+  onRestore: () => void
   onCancel: () => void
 }) {
   const tone = toneFor(item.instrument)
   const end = item.startMinute + item.durationMinutes
+  const moved = item.status === "remarcada"
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -49,26 +54,35 @@ export function ClassDetailsModal({
             <dd>{item.teacher}</dd>
           </div>
           <div>
-            <dt>Data</dt>
-            <dd>{formatDayTitle(item.date)}</dd>
-          </div>
-          <div>
-            <dt>Horário</dt>
+            <dt>Esta aula</dt>
             <dd>
-              {clockLabel(item.startMinute)} – {clockLabel(end)}
+              {formatDayTitle(item.date)} · {clockLabel(item.startMinute)} – {clockLabel(end)}
             </dd>
           </div>
           <div>
-            <dt>Duração</dt>
-            <dd>{item.durationMinutes} min</dd>
+            <dt>Recorrência</dt>
+            <dd>{recurrenceLabel(item.weekday, item.seriesStartMinute)}</dd>
           </div>
         </dl>
-        <div className="agenda-form-actions">
-          <button className="agenda-ghost" type="button" onClick={onCancel}>
-            Cancelar aula
+        <p className="agenda-note">
+          {moved
+            ? "Só esta data saiu do horário de sempre."
+            : "Esta data segue o horário de toda semana."}
+        </p>
+        <div className="agenda-detail-actions">
+          <button className="agenda-primary" type="button" onClick={onReschedule}>
+            Reagendar esta aula
           </button>
-          <button className="agenda-primary" type="button" onClick={onEdit}>
-            Editar
+          <button className="agenda-ghost" type="button" onClick={onEditSeries}>
+            Alterar todas as semanas
+          </button>
+          {moved ? (
+            <button className="agenda-ghost" type="button" onClick={onRestore}>
+              Voltar ao horário de sempre
+            </button>
+          ) : null}
+          <button className="agenda-ghost" type="button" onClick={onCancel}>
+            Cancelar esta aula
           </button>
         </div>
       </section>

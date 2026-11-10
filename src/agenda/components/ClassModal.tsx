@@ -1,27 +1,28 @@
 import { useEffect, useId, useState, type FormEvent } from "react"
 import { formatMinute } from "../../lib/dates.ts"
-import { INSTRUMENTS, TEACHERS, teachersIn, toneFor } from "../model.ts"
-import type { AgendaClass, AgendaDraft } from "../types.ts"
+import { INSTRUMENTS, TEACHERS, everyWeek, teachersIn, toneFor, weekdayOf } from "../model.ts"
+import type { AgendaDraft, AgendaSeries } from "../types.ts"
 import { ChoiceField, DateField, DurationField, Field, StudentField, type StudentOption } from "./FormFields.tsx"
 
 const DURATIONS = [30, 45, 60, 90, 120]
 
 export function ClassModal({
   value,
-  classes,
+  series,
   students,
   studentsStatus,
   onClose,
   onSave,
 }: {
   value: AgendaDraft
-  classes: AgendaClass[]
+  series: AgendaSeries[]
   students: StudentOption[]
   studentsStatus: "loading" | "ready" | "error"
   onClose: () => void
   onSave: (draft: AgendaDraft) => void
 }) {
   const titleId = useId()
+  const once = value.scope === "once"
   const [student, setStudent] = useState(value.student)
   const [teacher, setTeacher] = useState(value.teacher)
   const [instrument, setInstrument] = useState(value.instrument)
@@ -30,13 +31,15 @@ export function ClassModal({
   const [duration, setDuration] = useState(String(value.durationMinutes))
   const [error, setError] = useState("")
   const [menu, setMenu] = useState<"student" | "teacher" | "instrument" | "date" | null>(null)
-  const roster = teachersIn(classes)
+  const roster = teachersIn(series)
   const teachers = roster.some((item) => item.name === teacher)
     ? roster
     : [...roster, { name: teacher, instruments: instrument ? [instrument] : [] }]
   const durations = DURATIONS.includes(value.durationMinutes)
     ? DURATIONS
     : [...DURATIONS, value.durationMinutes].sort((a, b) => a - b)
+  const weekday = weekdayOf(when)
+  const weekend = weekday === 0 || weekday === 6
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -56,13 +59,21 @@ export function ClassModal({
     event.preventDefault()
     const [hours, minutes] = time.split(":").map(Number)
     const durationMinutes = Number(duration)
-    const knownStudent = students.some((item) => item.nome === student)
-    if (!knownStudent || !teacher || !instrument || !when || Number.isNaN(hours) || durationMinutes <= 0) {
-      setError(knownStudent ? "Preencha professor, instrumento, data, horário e duração." : "Escolha um aluno cadastrado.")
+    const knownStudent = students.some((item) => item.nome === student) || (Boolean(value.id) && student === value.student)
+    if (weekend) {
+      setError("Escolha um dia de segunda a sexta.")
+      return
+    }
+    if (!once && (!knownStudent || !teacher || !instrument)) {
+      setError(knownStudent ? "Preencha professor e instrumento." : "Escolha um aluno cadastrado.")
+      return
+    }
+    if (!when || Number.isNaN(hours) || durationMinutes <= 0) {
+      setError("Preencha data, horário e duração.")
       return
     }
     onSave({
-      id: value.id,
+      ...value,
       student: student.trim(),
       teacher,
       instrument,
@@ -71,6 +82,13 @@ export function ClassModal({
       durationMinutes,
     })
   }
+
+  const title = once ? "Reagendar esta aula" : value.id ? "Alterar todas as semanas" : "Nova aula"
+  const note = once
+    ? `Só esta data muda. A recorrência continua ${everyWeek(value.seriesWeekday ?? weekday)} às ${formatMinute(value.seriesStartMinute ?? value.startMinute)}.`
+    : weekend
+      ? "Escolha um dia de segunda a sexta."
+      : `Repete ${everyWeek(weekday)}, a partir desta data.`
 
   return (
     <div
@@ -88,44 +106,58 @@ export function ClassModal({
         onClick={(event) => event.stopPropagation()}
         onSubmit={submit}
       >
-        <h2 id={titleId}>{value.id ? "Editar aula" : "Nova aula"}</h2>
-        <StudentField
-          students={students}
-          status={studentsStatus}
-          value={student}
-          open={menu === "student"}
-          onOpen={(next) => setMenu(next ? "student" : null)}
-          onChange={setStudent}
-        />
-        <ChoiceField
-          label="Professor"
-          value={teacher}
-          open={menu === "teacher"}
-          onOpen={(next) => setMenu(next ? "teacher" : null)}
-          onChange={chooseTeacher}
-          options={teachers.map((item) => ({
-            value: item.name,
-            label: item.name,
-            hint: item.instruments.join(" · "),
-          }))}
-        />
-        <ChoiceField
-          label="Instrumento"
-          value={instrument}
-          open={menu === "instrument"}
-          onOpen={(next) => setMenu(next ? "instrument" : null)}
-          onChange={setInstrument}
-          options={INSTRUMENTS.map((name) => ({
-            value: name,
-            label: name,
-            dot: toneFor(name).dot,
-          }))}
-        />
+        <h2 id={titleId}>{title}</h2>
+        <p className="agenda-note">{note}</p>
+        {once ? (
+          <div className="agenda-readonly">
+            <p className="agenda-kicker" style={{ color: toneFor(instrument).bar }}>
+              {instrument}
+            </p>
+            <strong>{student}</strong>
+            <span>{teacher}</span>
+          </div>
+        ) : (
+          <>
+            <StudentField
+              students={students}
+              status={studentsStatus}
+              value={student}
+              open={menu === "student"}
+              onOpen={(next) => setMenu(next ? "student" : null)}
+              onChange={setStudent}
+            />
+            <ChoiceField
+              label="Professor"
+              value={teacher}
+              open={menu === "teacher"}
+              onOpen={(next) => setMenu(next ? "teacher" : null)}
+              onChange={chooseTeacher}
+              options={teachers.map((item) => ({
+                value: item.name,
+                label: item.name,
+                hint: item.instruments.join(" · "),
+              }))}
+            />
+            <ChoiceField
+              label="Instrumento"
+              value={instrument}
+              open={menu === "instrument"}
+              onOpen={(next) => setMenu(next ? "instrument" : null)}
+              onChange={setInstrument}
+              options={INSTRUMENTS.map((name) => ({
+                value: name,
+                label: name,
+                dot: toneFor(name).dot,
+              }))}
+            />
+          </>
+        )}
         <DateField
           value={when}
           open={menu === "date"}
           onOpen={(next) => setMenu(next ? "date" : null)}
           onChange={setWhen}
+          weekdaysOnly
         >
           <Field label="Horário">
             <input type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
@@ -138,7 +170,7 @@ export function ClassModal({
             Fechar
           </button>
           <button className="agenda-primary" type="submit">
-            Salvar
+            {once ? "Reagendar" : "Salvar"}
           </button>
         </div>
       </form>

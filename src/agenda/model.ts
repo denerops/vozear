@@ -1,5 +1,5 @@
 import { addDays, dateOfWeekday, formatMinute, mondayOf, timeToMinute } from "../lib/dates.ts"
-import type { AgendaClass } from "./types.ts"
+import type { AgendaClass, AgendaException, AgendaSeries } from "./types.ts"
 
 export const WEEKDAYS = [1, 2, 3, 4, 5]
 export const DAY_LABEL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
@@ -34,10 +34,9 @@ export function slotBounds() {
   return { start: SLOT_START, end: SLOT_END }
 }
 
-export function teachersIn(classes: AgendaClass[]) {
+export function teachersIn(classes: { teacher: string; instrument: string }[]) {
   const extras = new Map<string, Set<string>>()
   for (const item of classes) {
-    if (item.status === "cancelada") continue
     const known = TEACHERS.find((teacher) => teacher.name === item.teacher)
     if (known) continue
     const set = extras.get(item.teacher) ?? new Set<string>()
@@ -82,6 +81,72 @@ export function formatDayTitle(isoDate: string) {
   return `${weekday}, ${Number(isoDate.slice(8))} de ${month}`
 }
 
+export function everyWeek(weekday: number) {
+  const name = (DAY_NAME[weekday] ?? "semana").toLowerCase()
+  const article = weekday === 0 || weekday === 6 ? "todo" : "toda"
+  return `${article} ${name}`
+}
+
+export function recurrenceLabel(weekday: number, minute: number) {
+  const text = `${everyWeek(weekday)} · ${formatMinute(minute)}`
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+export function expandWeek(series: AgendaSeries[], exceptions: AgendaException[], monday: string) {
+  const end = addDays(monday, 4)
+  const inWeek = (date: string) => date >= monday && date <= end
+  const placed: AgendaClass[] = []
+
+  for (const item of series) {
+    if (item.weekday === 0 || item.weekday === 6) continue
+    const natural = dateOfWeekday(monday, item.weekday)
+    if (natural < item.startsOn) continue
+    const exception = exceptions.find((entry) => entry.seriesId === item.id && entry.fromDate === natural)
+    if (!exception) {
+      placed.push(occurrence(item, natural, natural, item.startMinute, item.durationMinutes, false))
+      continue
+    }
+    if (exception.kind === "remarcada" && inWeek(exception.date)) {
+      placed.push(occurrence(item, natural, exception.date, exception.startMinute, exception.durationMinutes, true))
+    }
+  }
+
+  for (const exception of exceptions) {
+    if (exception.kind !== "remarcada" || !inWeek(exception.date)) continue
+    if (placed.some((item) => item.seriesId === exception.seriesId && item.fromDate === exception.fromDate)) continue
+    const item = series.find((entry) => entry.id === exception.seriesId)
+    if (!item || exception.fromDate < item.startsOn) continue
+    placed.push(occurrence(item, exception.fromDate, exception.date, exception.startMinute, exception.durationMinutes, true))
+  }
+
+  return placed
+}
+
+function occurrence(
+  series: AgendaSeries,
+  fromDate: string,
+  date: string,
+  startMinute: number,
+  durationMinutes: number,
+  moved: boolean,
+): AgendaClass {
+  return {
+    id: `${series.id}@${fromDate}`,
+    seriesId: series.id,
+    fromDate,
+    student: series.student,
+    teacher: series.teacher,
+    instrument: series.instrument,
+    date,
+    startMinute,
+    durationMinutes,
+    status: moved ? "remarcada" : "prevista",
+    weekday: series.weekday,
+    seriesStartMinute: series.startMinute,
+    seriesDuration: series.durationMinutes,
+  }
+}
+
 export function classesOn(classes: AgendaClass[], date: string) {
   return classes
     .filter((item) => item.status !== "cancelada" && item.date === date)
@@ -117,7 +182,7 @@ export function placedEvents(events: AgendaClass[]) {
   return placed
 }
 
-export function sampleClasses(today: string): AgendaClass[] {
+export function sampleSeries(today: string): AgendaSeries[] {
   const monday = mondayOf(today)
   const lesson = (
     id: string,
@@ -126,15 +191,15 @@ export function sampleClasses(today: string): AgendaClass[] {
     instrument: string,
     student: string,
     teacher: string,
-  ): AgendaClass => ({
+  ): AgendaSeries => ({
     id,
     student,
     teacher,
     instrument,
-    date: dateOfWeekday(monday, weekday),
+    weekday,
     startMinute: timeToMinute(time),
     durationMinutes: 60,
-    status: "prevista",
+    startsOn: dateOfWeekday(monday, weekday),
   })
   return [
     lesson("amostra-1", 1, "15:00", "Violão", "Pedro M.", "Pedro"),

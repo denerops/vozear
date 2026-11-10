@@ -1,5 +1,5 @@
 import "../agenda.css"
-import type { AgendaClass } from "../types.ts"
+import type { AgendaClass, AgendaSeries } from "../types.ts"
 import { CalendarGrid } from "./CalendarGrid.tsx"
 import { CalendarHeader } from "./CalendarHeader.tsx"
 import { TeacherPanel } from "./DaySchedule.tsx"
@@ -20,7 +20,7 @@ export function WeeklyCalendar({
   monday: string
   selectedDate: string
   classes: AgendaClass[]
-  roster: AgendaClass[]
+  roster: AgendaSeries[]
   teacher: string | null
   onShift: (days: number) => void
   onSelectDate: (date: string) => void

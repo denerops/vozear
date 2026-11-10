@@ -22,7 +22,7 @@ export function CalendarEvent({
   return (
     <button
       type="button"
-      className="agenda-event"
+      className={`agenda-event${item.status === "remarcada" ? " is-moved" : ""}`}
       style={{
         top,
         height,
@@ -39,6 +39,7 @@ export function CalendarEvent({
       <strong>{item.instrument}</strong>
       <span>{item.student}</span>
       <span className="sr-only">
+        {item.status === "remarcada" ? "remarcada, " : ""}
         {clockLabel(item.startMinute)}, {item.durationMinutes} minutos
       </span>
     </button>

@@ -76,12 +76,14 @@ export function DateField({
   onOpen,
   onChange,
   children,
+  weekdaysOnly = false,
 }: {
   value: string
   open: boolean
   onOpen: (open: boolean) => void
   onChange: (value: string) => void
   children?: ReactNode
+  weekdaysOnly?: boolean
 }) {
   const [cursor, setCursor] = useState(value.slice(0, 7))
   const root = useRef<HTMLDivElement>(null)
@@ -138,11 +140,13 @@ export function DateField({
             ))}
             {Array.from({ length: days }, (_, index) => {
               const date = addDays(first, index)
+              const weekend = weekdayOf(date) === 0 || weekdayOf(date) === 6
               return (
                 <button
                   key={date}
                   type="button"
                   aria-pressed={date === value}
+                  disabled={weekdaysOnly && weekend}
                   onClick={() => {
                     onChange(date)
                     onOpen(false)

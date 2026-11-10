@@ -336,3 +336,114 @@ textarea { resize: vertical; }
   .nav-user span { display: none; }
   .page-head { display: grid; }
 }
+
+.back {
+  color: var(--on-stage-muted);
+  font-weight: 650;
+  text-decoration: none;
+  width: fit-content;
+}
+.back:hover { color: var(--on-stage); }
+.roster-tools { display: grid; gap: 0.7rem; }
+.roster-search {
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink);
+  padding: 0.85rem 1rem;
+}
+.roster-search::placeholder { color: var(--muted); }
+.roster-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.roster-filters button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--on-stage);
+  padding: 0.4rem 0.85rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.roster-filters button:hover { background: rgba(255, 248, 244, 0.12); }
+.roster-filters button[aria-pressed="true"] { background: var(--card); color: var(--burgundy); }
+.roster { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.65rem; }
+.roster-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.95rem 1rem;
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 20px;
+  text-decoration: none;
+}
+.roster-card:has(.badge) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.roster-card:hover { background: #fff; }
+.roster-card:focus-visible { outline: 2px solid #fff8f4; outline-offset: 3px; }
+.roster-avatar {
+  width: 2.7rem;
+  height: 2.7rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--burgundy);
+  font-weight: 700;
+}
+.roster-body { display: grid; gap: 0.12rem; min-width: 0; }
+.roster-body strong { font-size: 1.05rem; letter-spacing: -0.03em; }
+.roster-meta { color: var(--muted); font-size: 0.88rem; }
+.roster-class { display: flex; align-items: center; gap: 0.4rem; min-width: 0; color: var(--muted); font-size: 0.88rem; }
+.roster-class i { width: 0.55rem; height: 0.55rem; border-radius: 999px; flex: none; }
+.roster-class span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster-card .badge { align-self: start; }
+.roster-alert {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 16px;
+  background: #fff6d8;
+  color: #8a5a10;
+  font-weight: 650;
+}
+.roster-alert a { color: var(--burgundy); }
+.student-layout { display: grid; gap: 1rem; align-items: start; }
+.enrollment { position: relative; overflow: hidden; }
+.enrollment-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(80, 11, 26, 0.46);
+}
+.sheet-card {
+  width: min(440px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.2rem;
+  border-radius: 24px;
+  background: #fff5ef;
+  color: #24100f;
+}
+.sheet-card h2 { margin: 0; color: #24100f; }
+.sheet-card .muted { color: var(--muted); }
+.sheet-card .error { color: var(--burgundy); }
+.sheet-card .btn { background: var(--burgundy); color: var(--on-stage); }
+.sheet-card .btn:hover { background: #500b1a; }
+.sheet-card .btn.secondary { background: var(--secondary); color: var(--ink); }
+.sheet-card .btn.secondary:hover { background: #eadfd8; }
+.sheet-card summary { cursor: pointer; font-weight: 650; color: var(--burgundy); }
+.sheet-card details:not([open]) .stack { display: none; }
+.sheet-card details[open] .stack { margin-top: 0.7rem; }
+@media (min-width: 860px) {
+  .student-layout { grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 0.9fr); }
+}
+@media (max-width: 560px) {
+  .roster-card:has(.badge) { grid-template-columns: auto minmax(0, 1fr); }
+  .roster-card .badge { grid-column: 2; }
+}
