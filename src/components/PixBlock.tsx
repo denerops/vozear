@@ -10,7 +10,7 @@ export function PixBlock({ payload }: { payload: string }) {
     QRCode.toDataURL(payload, {
       margin: 1,
       width: 220,
-      color: { dark: "#1b2430", light: "#fffdf8" },
+      color: { dark: "#24100f", light: "#fff5ef" },
     }).then((value) => {
       if (alive) setUrl(value)
     })
