@@ -1,18 +1,11 @@
-import { addDays, dateOfWeekday, formatMinute, mondayOf, timeToMinute } from "../lib/dates.ts"
+import { addDays, dateOfWeekday, formatMinute } from "../lib/dates.ts"
 import type { AgendaClass, AgendaException, AgendaSeries } from "./types.ts"
 
 export const WEEKDAYS = [1, 2, 3, 4, 5]
 export const DAY_LABEL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 export const DAY_NAME = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
-export const INSTRUMENTS = ["Canto", "Violão", "Piano", "Pandeiro", "Percussão"]
 export const SLOT_START = 8 * 60
 export const SLOT_END = 20 * 60
-
-export const TEACHERS = [
-  { name: "Brenda", instruments: ["Canto"] },
-  { name: "Dani", instruments: ["Pandeiro", "Percussão"] },
-  { name: "Pedro", instruments: ["Violão", "Piano"] },
-]
 export const ROW_HEIGHT = 58
 
 export type InstrumentTone = { background: string; bar: string; dot: string }
@@ -34,17 +27,20 @@ export function slotBounds() {
   return { start: SLOT_START, end: SLOT_END }
 }
 
-export function teachersIn(classes: { teacher: string; instrument: string }[]) {
+export function teachersIn(
+  classes: { teacher: string; instrument: string }[],
+  catalog: { name: string; instruments: string[] }[] = [],
+) {
+  const known = new Set(catalog.map((teacher) => teacher.name))
   const extras = new Map<string, Set<string>>()
   for (const item of classes) {
-    const known = TEACHERS.find((teacher) => teacher.name === item.teacher)
-    if (known) continue
+    if (known.has(item.teacher)) continue
     const set = extras.get(item.teacher) ?? new Set<string>()
     set.add(item.instrument)
     extras.set(item.teacher, set)
   }
   return [
-    ...TEACHERS,
+    ...catalog,
     ...[...extras.entries()].map(([name, instruments]) => ({ name, instruments: [...instruments].sort() })),
   ]
 }
@@ -180,36 +176,6 @@ export function placedEvents(events: AgendaClass[]) {
   }
   if (cluster.length > 0) flush()
   return placed
-}
-
-export function sampleSeries(today: string): AgendaSeries[] {
-  const monday = mondayOf(today)
-  const lesson = (
-    id: string,
-    weekday: number,
-    time: string,
-    instrument: string,
-    student: string,
-    teacher: string,
-  ): AgendaSeries => ({
-    id,
-    student,
-    teacher,
-    instrument,
-    weekday,
-    startMinute: timeToMinute(time),
-    durationMinutes: 60,
-    startsOn: dateOfWeekday(monday, weekday),
-  })
-  return [
-    lesson("amostra-1", 1, "15:00", "Violão", "Pedro M.", "Pedro"),
-    lesson("amostra-2", 1, "19:00", "Canto", "João P.", "Brenda"),
-    lesson("amostra-3", 2, "14:00", "Canto", "Ana C.", "Brenda"),
-    lesson("amostra-4", 2, "17:00", "Pandeiro", "Rafael S.", "Dani"),
-    lesson("amostra-5", 3, "16:00", "Piano", "Luiza R.", "Pedro"),
-    lesson("amostra-6", 4, "18:00", "Violão", "Marina L.", "Pedro"),
-    lesson("amostra-7", 4, "20:00", "Piano", "Carla B.", "Pedro"),
-  ]
 }
 
 export function clockLabel(minute: number) {

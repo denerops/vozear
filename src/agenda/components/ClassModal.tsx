@@ -1,25 +1,27 @@
 import { useEffect, useId, useState, type FormEvent } from "react"
 import { formatMinute } from "../../lib/dates.ts"
-import { INSTRUMENTS, TEACHERS, everyWeek, teachersIn, toneFor, weekdayOf } from "../model.ts"
-import type { AgendaDraft, AgendaSeries } from "../types.ts"
+import { humanError } from "../../lib/errors.ts"
+import { everyWeek, toneFor, weekdayOf } from "../model.ts"
+import type { AgendaTeacher } from "../records.ts"
+import type { AgendaDraft } from "../types.ts"
 import { ChoiceField, DateField, DurationField, Field, StudentField, type StudentOption } from "./FormFields.tsx"
 
 const DURATIONS = [30, 45, 60, 90, 120]
 
 export function ClassModal({
   value,
-  series,
+  teachers,
   students,
   studentsStatus,
   onClose,
   onSave,
 }: {
   value: AgendaDraft
-  series: AgendaSeries[]
+  teachers: AgendaTeacher[]
   students: StudentOption[]
   studentsStatus: "loading" | "ready" | "error"
   onClose: () => void
-  onSave: (draft: AgendaDraft) => void
+  onSave: (draft: AgendaDraft) => Promise<void>
 }) {
   const titleId = useId()
   const once = value.scope === "once"
@@ -30,11 +32,11 @@ export function ClassModal({
   const [time, setTime] = useState(formatMinute(value.startMinute))
   const [duration, setDuration] = useState(String(value.durationMinutes))
   const [error, setError] = useState("")
+  const [pending, setPending] = useState(false)
   const [menu, setMenu] = useState<"student" | "teacher" | "instrument" | "date" | null>(null)
-  const roster = teachersIn(series)
-  const teachers = roster.some((item) => item.name === teacher)
-    ? roster
-    : [...roster, { name: teacher, instruments: instrument ? [instrument] : [] }]
+  const roster = teachers.some((item) => item.name === teacher)
+    ? teachers
+    : [...teachers, { id: teacher, name: teacher, instruments: instrument ? [instrument] : [] }]
   const durations = DURATIONS.includes(value.durationMinutes)
     ? DURATIONS
     : [...DURATIONS, value.durationMinutes].sort((a, b) => a - b)
@@ -51,11 +53,11 @@ export function ClassModal({
 
   function chooseTeacher(name: string) {
     setTeacher(name)
-    const match = teachers.find((item) => item.name === name) ?? TEACHERS.find((item) => item.name === name)
+    const match = roster.find((item) => item.name === name)
     if (match && !match.instruments.includes(instrument)) setInstrument(match.instruments[0])
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
     const [hours, minutes] = time.split(":").map(Number)
     const durationMinutes = Number(duration)
@@ -72,15 +74,22 @@ export function ClassModal({
       setError("Preencha data, horário e duração.")
       return
     }
-    onSave({
-      ...value,
-      student: student.trim(),
-      teacher,
-      instrument,
-      date: when,
-      startMinute: hours * 60 + minutes,
-      durationMinutes,
-    })
+    setPending(true)
+    setError("")
+    try {
+      await onSave({
+        ...value,
+        student: student.trim(),
+        teacher,
+        instrument,
+        date: when,
+        startMinute: hours * 60 + minutes,
+        durationMinutes,
+      })
+    } catch (reason) {
+      setError(humanError(reason as { message?: string }))
+      setPending(false)
+    }
   }
 
   const title = once ? "Reagendar esta aula" : value.id ? "Alterar todas as semanas" : "Nova aula"
@@ -132,7 +141,7 @@ export function ClassModal({
               open={menu === "teacher"}
               onOpen={(next) => setMenu(next ? "teacher" : null)}
               onChange={chooseTeacher}
-              options={teachers.map((item) => ({
+              options={roster.map((item) => ({
                 value: item.name,
                 label: item.name,
                 hint: item.instruments.join(" · "),
@@ -144,7 +153,7 @@ export function ClassModal({
               open={menu === "instrument"}
               onOpen={(next) => setMenu(next ? "instrument" : null)}
               onChange={setInstrument}
-              options={INSTRUMENTS.map((name) => ({
+              options={(roster.find((item) => item.name === teacher)?.instruments ?? []).map((name) => ({
                 value: name,
                 label: name,
                 dot: toneFor(name).dot,
@@ -169,8 +178,8 @@ export function ClassModal({
           <button className="agenda-ghost" type="button" onClick={onClose}>
             Fechar
           </button>
-          <button className="agenda-primary" type="submit">
-            {once ? "Reagendar" : "Salvar"}
+          <button className="agenda-primary" type="submit" disabled={pending}>
+            {pending ? "Salvando…" : once ? "Reagendar" : "Salvar"}
           </button>
         </div>
       </form>

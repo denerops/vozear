@@ -1,18 +1,21 @@
 import { teachersIn, toneFor } from "../model.ts"
+import type { AgendaTeacher } from "../records.ts"
 import type { AgendaSeries } from "../types.ts"
 
 export function TeacherPanel({
   classes,
+  catalog,
   selected,
   onSelect,
   onCreate,
 }: {
   classes: AgendaSeries[]
+  catalog: AgendaTeacher[]
   selected: string | null
   onSelect: (teacher: string | null) => void
   onCreate: () => void
 }) {
-  const teachers = teachersIn(classes)
+  const teachers = teachersIn(classes, catalog)
   return (
     <aside className="agenda-card agenda-daycard">
       <h2>Professores</h2>

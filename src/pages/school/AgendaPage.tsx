@@ -1,58 +1,123 @@
 import { useEffect, useMemo, useState } from "react"
+import { useSession } from "../../auth/session.tsx"
 import { ClassDetailsModal } from "../../agenda/components/ClassDetailsModal.tsx"
 import { ClassModal } from "../../agenda/components/ClassModal.tsx"
 import type { StudentOption } from "../../agenda/components/FormFields.tsx"
 import { WeeklyCalendar } from "../../agenda/components/WeeklyCalendar.tsx"
-import { expandWeek, sampleSeries, TEACHERS, weekdayOf } from "../../agenda/model.ts"
-import type { AgendaClass, AgendaDraft, AgendaException, AgendaSeries } from "../../agenda/types.ts"
-import { loadPessoas } from "../../data/api.ts"
-import { addDays, mondayOf, saoPauloDate } from "../../lib/dates.ts"
+import { expandWeek, weekdayOf } from "../../agenda/model.ts"
+import {
+  cancelLesson,
+  createEnrollment,
+  endEnrollment,
+  ensureLessons,
+  findLesson,
+  lessonHorizon,
+  moveEnrollment,
+  rescheduleLesson,
+} from "../../agenda/persist.ts"
+import { toExceptions, toSeries, type AgendaTeacher } from "../../agenda/records.ts"
+import type { AgendaClass, AgendaDraft } from "../../agenda/types.ts"
+import { ErrorNote } from "../../components/ui.tsx"
+import { loadAulas, loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
+import { addDays, mondayOf, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
+import { humanError } from "../../lib/errors.ts"
+import type { Aula, Instrumento, Matricula, Pessoa } from "../../types.ts"
 
 export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
+  const session = useSession()
   const today = saoPauloDate()
-  const [series, setSeries] = useState<AgendaSeries[]>(() => sampleSeries(today))
-  const [exceptions, setExceptions] = useState<AgendaException[]>([])
+  const professorId = mode === "professor" ? session.userId : null
+  const [matriculas, setMatriculas] = useState<Matricula[]>([])
+  const [aulas, setAulas] = useState<Aula[]>([])
+  const [people, setPeople] = useState<Pessoa[]>([])
+  const [instrumentos, setInstrumentos] = useState<Instrumento[]>([])
+  const [students, setStudents] = useState<StudentOption[]>([])
+  const [teachers, setTeachers] = useState<AgendaTeacher[]>([])
+  const [studentsStatus, setStudentsStatus] = useState<"loading" | "ready" | "error">("loading")
   const [cursor, setCursor] = useState(today)
   const [selectedDate, setSelectedDate] = useState(today)
   const [teacher, setTeacher] = useState<string | null>(null)
-  const [students, setStudents] = useState<StudentOption[]>([])
-  const [studentsStatus, setStudentsStatus] = useState<"loading" | "ready" | "error">("loading")
   const [editing, setEditing] = useState<AgendaDraft | null>(null)
   const [detailsId, setDetailsId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
+    if (mode === "professor" && !professorId) return
     let alive = true
-    loadPessoas("aluno")
-      .then((people) => {
-        if (!alive) return
-        setStudents(people.map((person) => ({
-          id: person.id,
-          nome: person.nome,
-          email: person.email,
-          telefone: person.telefone,
-        })))
-        setStudentsStatus("ready")
+    setStudentsStatus("loading")
+    async function load() {
+      const until = lessonHorizon()
+      const [enrollments, pupils, faculty, instruments] = await Promise.all([
+        loadMatriculas(professorId ? { professorId } : undefined),
+        loadPessoas("aluno"),
+        loadPessoas("professor"),
+        loadInstrumentos(),
+      ])
+      const active = enrollments.filter((item) => item.situacao === "ativa").map((item) => item.id)
+      await ensureLessons(active, until)
+      const lessons = await loadAulas({
+        from: saoPauloTimestamp("2026-01-01", "00:00"),
+        until: saoPauloTimestamp(addDays(until, 1), "00:00"),
+        ...(professorId ? { professorId } : {}),
       })
-      .catch(() => {
-        if (alive) setStudentsStatus("error")
+      if (!alive) return
+      const names = new Map(instruments.map((item) => [item.id, item.nome]))
+      const visibleFaculty = professorId ? faculty.filter((item) => item.id === professorId) : faculty
+      setMatriculas(enrollments)
+      setAulas(lessons)
+      setPeople([...pupils, ...faculty])
+      setInstrumentos(instruments)
+      setStudents(pupils.map((person) => ({
+        id: person.id,
+        nome: person.nome,
+        email: person.email,
+        telefone: person.telefone,
+      })))
+      setTeachers(visibleFaculty.map((person) => ({
+        id: person.id,
+        name: person.nome,
+        instruments: person.instrumentos.map((id) => names.get(id) ?? "").filter(Boolean),
+      })))
+      setStudentsStatus("ready")
+    }
+    load()
+      .catch((reason: { message?: string }) => {
+        if (!alive) return
+        setError(humanError(reason))
+        setStudentsStatus("error")
       })
     return () => {
       alive = false
     }
-  }, [])
+  }, [mode, professorId, version])
 
+  const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
+  const instrumentNames = useMemo(
+    () => new Map(instrumentos.map((item) => [item.id, item.nome])),
+    [instrumentos],
+  )
+  const series = useMemo(
+    () => toSeries(matriculas, peopleById, instrumentNames),
+    [matriculas, peopleById, instrumentNames],
+  )
+  const exceptions = useMemo(() => toExceptions(aulas, matriculas), [aulas, matriculas])
   const monday = mondayOf(cursor)
   const occurrences = useMemo(() => expandWeek(series, exceptions, monday), [series, exceptions, monday])
   const visible = teacher ? occurrences.filter((item) => item.teacher === teacher) : occurrences
   const details = occurrences.find((item) => item.id === detailsId) ?? null
 
+  function refresh() {
+    setVersion((current) => current + 1)
+  }
+
   function blankDraft(date: string, startMinute: number): AgendaDraft {
-    const match = TEACHERS.find((item) => item.name === teacher)
+    const match = teachers.find((item) => item.name === teacher) ?? teachers[0]
     return {
       scope: "series",
       student: "",
-      teacher: match?.name ?? TEACHERS[0].name,
-      instrument: match?.instruments[0] ?? "Canto",
+      teacher: match?.name ?? "",
+      instrument: match?.instruments[0] ?? "",
       date,
       startMinute,
       durationMinutes: 60,
@@ -65,94 +130,88 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
     setDetailsId(null)
   }
 
-  function replaceException(next: AgendaException | null, seriesId: string, fromDate: string) {
-    setExceptions((current) => {
-      const rest = current.filter((item) => !(item.seriesId === seriesId && item.fromDate === fromDate))
-      return next ? [...rest, next] : rest
-    })
+  async function lessonFor(seriesId: string, fromDate: string) {
+    const stored = aulas.find((item) => item.matricula_id === seriesId && item.data_serie.slice(0, 10) === fromDate)
+    if (stored) return stored
+    await ensureLessons([seriesId])
+    const created = await findLesson(seriesId, fromDate)
+    if (!created) throw new Error("Essa data não tem aula registrada.")
+    return created
   }
 
-  function save(draft: AgendaDraft) {
+  async function save(draft: AgendaDraft) {
+    setError(null)
     if (draft.scope === "once" && draft.seriesId && draft.fromDate) {
-      const source = series.find((item) => item.id === draft.seriesId)
-      const sameSlot =
-        source &&
-        draft.date === draft.fromDate &&
-        draft.startMinute === source.startMinute &&
-        draft.durationMinutes === source.durationMinutes
-      replaceException(
-        sameSlot
-          ? null
-          : {
-              seriesId: draft.seriesId,
-              fromDate: draft.fromDate,
-              kind: "remarcada",
-              date: draft.date,
-              startMinute: draft.startMinute,
-              durationMinutes: draft.durationMinutes,
-            },
-        draft.seriesId,
-        draft.fromDate,
-      )
+      const aula = await lessonFor(draft.seriesId, draft.fromDate)
+      if (draft.durationMinutes !== aula.duracao_minutos) {
+        throw new Error("A duração desta data continua a da matrícula.")
+      }
+      await rescheduleLesson(aula.id, draft.date, draft.startMinute)
       setCursor(draft.date)
       setSelectedDate(draft.date)
       setEditing(null)
+      refresh()
       return
     }
 
+    const aluno = students.find((item) => item.nome === draft.student)
+    const professor = teachers.find((item) => item.name === draft.teacher)
+    const instrumento = instrumentos.find((item) => item.nome === draft.instrument)
+    if (!aluno || !professor || !instrumento) throw new Error("Escolha aluno, professor e instrumento cadastrados.")
     const weekday = weekdayOf(draft.date)
-    if (draft.id && series.some((item) => item.id === draft.id)) {
-      setSeries((current) =>
-        current.map((item) =>
-          item.id === draft.id
-            ? {
-                ...item,
-                student: draft.student,
-                teacher: draft.teacher,
-                instrument: draft.instrument,
-                weekday,
-                startMinute: draft.startMinute,
-                durationMinutes: draft.durationMinutes,
-                startsOn: draft.date < item.startsOn ? draft.date : item.startsOn,
-              }
-            : item,
-        ),
-      )
+    const current = draft.id ? matriculas.find((item) => item.id === draft.id) : undefined
+    const samePeople = current
+      && current.aluno_id === aluno.id
+      && current.professor_id === professor.id
+      && current.instrumento_id === instrumento.id
+    if (current && samePeople) {
+      await moveEnrollment(current.horario_id, current.id, {
+        weekday,
+        startMinute: draft.startMinute,
+        durationMinutes: draft.durationMinutes,
+      })
     } else {
-      setSeries((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          student: draft.student,
-          teacher: draft.teacher,
-          instrument: draft.instrument,
-          weekday,
-          startMinute: draft.startMinute,
-          durationMinutes: draft.durationMinutes,
-          startsOn: draft.date,
-        },
-      ])
+      if (current) await endEnrollment(current.id)
+      await createEnrollment({
+        alunoId: aluno.id,
+        professorId: professor.id,
+        instrumentoId: instrumento.id,
+        valorCentavos: instrumento.valor_mensal_centavos,
+        startsOn: draft.date,
+        weekday,
+        startMinute: draft.startMinute,
+        durationMinutes: draft.durationMinutes,
+      })
     }
     setCursor(draft.date)
     setSelectedDate(draft.date)
     setEditing(null)
+    refresh()
   }
 
-  function cancelOnce(item: AgendaClass) {
+  async function cancelOnce(item: AgendaClass) {
     if (!window.confirm("Cancelar só esta data? As outras semanas continuam no horário de sempre.")) return
-    replaceException(
-      {
-        seriesId: item.seriesId,
-        fromDate: item.fromDate,
-        kind: "cancelada",
-        date: item.fromDate,
-        startMinute: item.seriesStartMinute,
-        durationMinutes: item.seriesDuration,
-      },
-      item.seriesId,
-      item.fromDate,
-    )
-    setDetailsId(null)
+    setError(null)
+    try {
+      const aula = await lessonFor(item.seriesId, item.fromDate)
+      await cancelLesson(aula.id)
+      setDetailsId(null)
+      refresh()
+    } catch (reason) {
+      setError(humanError(reason as { message?: string }))
+    }
+  }
+
+  async function restore(item: AgendaClass) {
+    setError(null)
+    try {
+      const aula = await lessonFor(item.seriesId, item.fromDate)
+      await rescheduleLesson(aula.id, item.fromDate, item.seriesStartMinute)
+      setDetailsId(null)
+      refresh()
+    } catch (reason) {
+      setError(humanError(reason as { message?: string }))
+    }
   }
 
   function openOnce(item: AgendaClass) {
@@ -188,11 +247,13 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
 
   return (
     <div data-mode={mode}>
+      <ErrorNote>{error}</ErrorNote>
       <WeeklyCalendar
         monday={monday}
         selectedDate={selectedDate}
         classes={visible}
         roster={series}
+        teachers={teachers}
         teacher={teacher}
         onShift={shift}
         onSelectDate={setSelectedDate}
@@ -204,7 +265,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
       {editing ? (
         <ClassModal
           value={editing}
-          series={series}
+          teachers={teachers}
           students={students}
           studentsStatus={studentsStatus}
           onClose={() => setEditing(null)}
@@ -217,11 +278,8 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
           onClose={() => setDetailsId(null)}
           onReschedule={() => openOnce(details)}
           onEditSeries={() => openSeries(details)}
-          onRestore={() => {
-            replaceException(null, details.seriesId, details.fromDate)
-            setDetailsId(null)
-          }}
-          onCancel={() => cancelOnce(details)}
+          onRestore={() => void restore(details)}
+          onCancel={() => void cancelOnce(details)}
         />
       ) : null}
     </div>
