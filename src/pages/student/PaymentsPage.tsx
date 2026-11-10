@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useSession } from "../../auth/session.tsx"
+import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
 import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMensalidades } from "../../data/api.ts"
@@ -7,14 +8,25 @@ import { formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
 import { pixCopiaECola } from "../../lib/pix.ts"
-import type { Configuracao, Instrumento, Mensalidade } from "../../types.ts"
+import type { Configuracao, Mensalidade } from "../../types.ts"
+
+function monthLabel(value: string) {
+  const label = formatMonth(value)
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function paidOn(value: string | null) {
+  if (!value) return null
+  return formatDate(value.slice(0, 10))
+}
 
 export function PaymentsPage() {
   const session = useSession()
   const [charges, setCharges] = useState<Mensalidade[]>([])
   const [config, setConfig] = useState<Configuracao | null>(null)
-  const [instrumentos, setInstrumentos] = useState<Map<string, Instrumento>>(new Map())
+  const [instrumentos, setInstrumentos] = useState<Map<string, string>>(new Map())
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const today = saoPauloDate()
 
   useEffect(() => {
@@ -25,51 +37,93 @@ export function PaymentsPage() {
         if (!alive) return
         setCharges(items)
         setConfig(school)
-        setInstrumentos(new Map(instruments.map((item) => [item.id, item])))
+        setInstrumentos(new Map(instruments.map((item) => [item.id, item.nome])))
       })
       .catch((reason: { message?: string }) => {
         if (alive) setError(humanError(reason))
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
       })
     return () => {
       alive = false
     }
   }, [session.userId])
 
+  const open = charges
+    .filter((item) => item.situacao === "aberta")
+    .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
+  const paid = charges
+    .filter((item) => item.situacao === "paga")
+    .sort((a, b) => b.competencia.localeCompare(a.competencia))
+  const due = open.reduce((sum, item) => sum + item.valor_centavos, 0)
+
   return (
-    <Page title="Pagamentos" lede="A mensalidade é de cada instrumento. O Pix não confirma sozinho: a escola dá baixa quando o valor cai.">
+    <Page
+      title="Pagamentos"
+      lede={loading ? "Carregando…" : open.length === 0 ? "Nada em aberto." : `${formatMoney(due)} em aberto`}
+    >
       <ErrorNote>{error}</ErrorNote>
-      {charges.length === 0 ? <Empty>Nenhuma mensalidade gerada.</Empty> : null}
-      <div className="stack">
-        {charges.map((charge) => {
-          const late = charge.situacao === "aberta" && charge.vencimento < today
-          let payload = ""
-          if (charge.situacao === "aberta" && config?.chave_pix) {
-            payload = pixCopiaECola({
-              chave: config.chave_pix,
-              nome: config.nome_recebedor,
-              cidade: config.cidade_recebedor,
-              valor: charge.valor_centavos / 100,
-              txid: charge.pix_txid,
-            })
-          }
-          return (
-            <article key={charge.id} className="card stack">
-              <div className="row spread">
-                <strong>{instrumentos.get(charge.instrumento_id)?.nome}</strong>
-                <StatusBadge value={charge.situacao} />
-              </div>
-              <p>
-                {formatMonth(charge.competencia)} · {formatMoney(charge.valor_centavos)}
-              </p>
-              <p className={late ? "late" : "muted"}>Vencimento {formatDate(charge.vencimento)}</p>
-              {payload ? <PixBlock payload={payload} /> : null}
-              {charge.situacao === "aberta" && !config?.chave_pix ? (
-                <p className="muted">A escola ainda não configurou a chave Pix.</p>
-              ) : null}
-            </article>
-          )
-        })}
-      </div>
+      {loading ? null : charges.length === 0 ? (
+        <Empty>Nenhuma mensalidade ainda.</Empty>
+      ) : (
+        <>
+          <section className="stack">
+            <h2>A pagar</h2>
+            {open.length === 0 ? <Empty>Nenhuma mensalidade em aberto.</Empty> : null}
+            {open.map((charge) => {
+              const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
+              const tone = toneFor(instrumento)
+              const late = charge.vencimento < today
+              const payload = config?.chave_pix
+                ? pixCopiaECola({
+                    chave: config.chave_pix,
+                    nome: config.nome_recebedor,
+                    cidade: config.cidade_recebedor,
+                    valor: charge.valor_centavos / 100,
+                    txid: charge.pix_txid,
+                  })
+                : ""
+              return (
+                <article key={charge.id} className="card enrollment pay-card">
+                  <span className="enrollment-bar" style={{ background: tone.bar }} />
+                  <div className="row spread">
+                    <strong>{instrumento}</strong>
+                    <StatusBadge value={charge.situacao} />
+                  </div>
+                  <p className="muted">{monthLabel(charge.competencia)}</p>
+                  <p className="pay-amount">{formatMoney(charge.valor_centavos)}</p>
+                  <p className={late ? "late" : "muted"}>
+                    {late ? `Venceu em ${formatDate(charge.vencimento)}` : `Vence em ${formatDate(charge.vencimento)}`}
+                  </p>
+                  {payload ? <PixBlock payload={payload} /> : <p className="muted">A escola ainda não configurou a chave Pix.</p>}
+                </article>
+              )
+            })}
+          </section>
+          {paid.length > 0 ? (
+            <section className="stack">
+              <h2>Pagas</h2>
+              {paid.map((charge) => {
+                const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
+                const when = paidOn(charge.paga_em)
+                return (
+                  <article key={charge.id} className="card enrollment pay-card is-paid">
+                    <span className="enrollment-bar" style={{ background: toneFor(instrumento).bar }} />
+                    <div className="row spread">
+                      <strong>{instrumento}</strong>
+                      <StatusBadge value={charge.situacao} />
+                    </div>
+                    <p className="muted">{monthLabel(charge.competencia)}</p>
+                    <p className="pay-amount">{formatMoney(charge.valor_centavos)}</p>
+                    <p className="muted">{when ? `Recebida em ${when}` : "Recebida"}</p>
+                  </article>
+                )
+              })}
+            </section>
+          ) : null}
+        </>
+      )}
     </Page>
   )
 }

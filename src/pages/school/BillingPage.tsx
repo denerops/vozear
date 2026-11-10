@@ -1,14 +1,38 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
+import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
 import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { currentMonth, formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
-import { client } from "../../lib/supabase.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
 import { pixCopiaECola } from "../../lib/pix.ts"
+import { client } from "../../lib/supabase.ts"
 import { fillTemplate, whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Configuracao, Mensalidade, Pessoa } from "../../types.ts"
+
+type View = "todas" | "aberta" | "vencida" | "paga"
+
+function shiftMonth(month: string, delta: number) {
+  const [year, value] = month.split("-").map(Number)
+  const next = new Date(Date.UTC(year, value - 1 + delta, 1))
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+function monthTitle(month: string) {
+  const label = formatMonth(`${month}-01`)
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+function fold(value: string) {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+}
+
+function paidOn(value: string | null) {
+  if (!value) return null
+  return formatDate(value.slice(0, 10))
+}
 
 export function BillingPage() {
   const [month, setMonth] = useState(currentMonth())
@@ -18,6 +42,11 @@ export function BillingPage() {
   const [instrumentos, setInstrumentos] = useState<Map<string, string>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [view, setView] = useState<View>("todas")
+  const [search, setSearch] = useState("")
+  const [pixId, setPixId] = useState<string | null>(null)
   const today = saoPauloDate()
 
   async function reload() {
@@ -35,108 +64,205 @@ export function BillingPage() {
 
   useEffect(() => {
     let alive = true
-    reload().catch((reason: { message?: string }) => {
-      if (alive) setError(humanError(reason))
-    })
+    reload()
+      .catch((reason: { message?: string }) => {
+        if (alive) setError(humanError(reason))
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
     return () => {
       alive = false
     }
   }, [])
 
-  const visible = charges.filter((item) => item.competencia.startsWith(month))
-  const pessoas = new Map(people.map((person) => [person.id, person]))
+  const pessoas = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
+  const monthCharges = charges.filter((item) => item.competencia.startsWith(month))
+  const open = monthCharges.filter((item) => item.situacao === "aberta")
+  const late = open.filter((item) => item.vencimento < today)
+  const paid = monthCharges.filter((item) => item.situacao === "paga")
+  const openSum = open.reduce((sum, item) => sum + item.valor_centavos, 0)
+  const paidSum = paid.reduce((sum, item) => sum + item.valor_centavos, 0)
+  const query = fold(search.trim())
+  const visible = monthCharges
+    .filter((item) => {
+      const isLate = item.situacao === "aberta" && item.vencimento < today
+      if (view === "aberta" && item.situacao !== "aberta") return false
+      if (view === "vencida" && !isLate) return false
+      if (view === "paga" && item.situacao !== "paga") return false
+      if (!query) return true
+      const person = pessoas.get(item.aluno_id)
+      const instrument = instrumentos.get(item.instrumento_id) ?? ""
+      return fold(`${person?.nome ?? ""} ${instrument}`).includes(query)
+    })
+    .sort((a, b) => {
+      const rank = (item: Mensalidade) => (item.situacao === "paga" ? 2 : item.vencimento < today ? 0 : 1)
+      return rank(a) - rank(b) || a.vencimento.localeCompare(b.vencimento) || (pessoas.get(a.aluno_id)?.nome ?? "").localeCompare(pessoas.get(b.aluno_id)?.nome ?? "", "pt-BR")
+    })
 
   async function generate() {
+    setBusy(true)
     setError(null)
     setInfo(null)
     const { data, error: generateError } = await client().rpc("gerar_mensalidades", {
       p_competencia: `${month}-01`,
     })
-    if (generateError) setError(humanError(generateError))
-    else {
-      setInfo(`${data ?? 0} mensalidade(s) nova(s).`)
-      await reload()
+    setBusy(false)
+    if (generateError) {
+      setError(humanError(generateError))
+      return
     }
+    const count = Number(data ?? 0)
+    setInfo(count === 0 ? "Nenhuma mensalidade nova neste mês." : count === 1 ? "1 mensalidade nova." : `${count} mensalidades novas.`)
+    await reload()
   }
 
   async function markPaid(id: string) {
     setError(null)
+    setInfo(null)
     const { error: payError } = await client().rpc("baixar_mensalidade", { p_id: id })
     if (payError) setError(humanError(payError))
-    else await reload()
+    else {
+      setPixId(null)
+      setInfo("Baixa registrada.")
+      await reload()
+    }
   }
+
+  const lede = loading
+    ? "Carregando…"
+    : monthCharges.length === 0
+      ? "Nada gerado neste mês."
+      : `${open.length} em aberto · ${formatMoney(openSum)}`
 
   return (
     <Page
       title="Mensalidades"
-      lede="Uma cobrança por matrícula. O botão abre o seu WhatsApp com o texto e o Pix; nada é enviado sozinho."
+      lede={lede}
       action={
-        <div className="row">
-          <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
-          <button className="btn" type="button" onClick={generate}>Gerar mês</button>
+        <div className="month-nav">
+          <button type="button" aria-label="Mês anterior" onClick={() => setMonth(shiftMonth(month, -1))}>
+            ‹
+          </button>
+          <strong>{monthTitle(month)}</strong>
+          <button type="button" aria-label="Próximo mês" onClick={() => setMonth(shiftMonth(month, 1))}>
+            ›
+          </button>
+          <button className="btn" type="button" onClick={() => void generate()} disabled={busy}>
+            {busy ? "Gerando…" : "Gerar mês"}
+          </button>
         </div>
       }
     >
       <ErrorNote>{error}</ErrorNote>
-      {info ? <p className="muted">{info}</p> : null}
-      {visible.length === 0 ? <Empty>Nada neste mês. Gere as mensalidades das matrículas ativas.</Empty> : null}
-      <div className="stack">
-        {visible.map((charge) => {
-          const person = pessoas.get(charge.aluno_id)
-          const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
-          const late = charge.situacao === "aberta" && charge.vencimento < today
-          let payload = ""
-          let link = ""
-          if (config?.chave_pix) {
-            payload = pixCopiaECola({
-              chave: config.chave_pix,
-              nome: config.nome_recebedor,
-              cidade: config.cidade_recebedor,
-              valor: charge.valor_centavos / 100,
-              txid: charge.pix_txid,
-            })
-            if (person?.telefone) {
-              link = whatsAppUrl(
-                person.telefone,
-                fillTemplate(config.mensagem_whatsapp, {
-                  nome: person.nome,
-                  instrumento,
-                  valor: formatMoney(charge.valor_centavos),
-                  vencimento: formatDate(charge.vencimento),
-                  pix: payload,
-                }),
-              )
-            }
-          }
-          return (
-            <article key={charge.id} className="card stack">
-              <div className="row spread">
-                <strong>{person?.nome ?? "Aluno"} · {instrumento}</strong>
-                <StatusBadge value={charge.situacao} />
-              </div>
-              <p>
-                {formatMonth(charge.competencia)} · {formatMoney(charge.valor_centavos)}
-              </p>
-              <p className={late ? "late" : "muted"}>Vencimento {formatDate(charge.vencimento)}</p>
-              {charge.situacao === "aberta" ? (
-                <div className="row">
-                  <button className="btn" type="button" onClick={() => markPaid(charge.id)}>
-                    Marcar como paga
-                  </button>
-                  {link ? (
-                    <a className="btn secondary" href={link} target="_blank" rel="noreferrer">
-                      Cobrar no WhatsApp
-                    </a>
-                  ) : (
-                    <span className="muted">Sem telefone ou sem chave Pix.</span>
-                  )}
-                </div>
-              ) : null}
-              {charge.situacao === "aberta" && payload ? <PixBlock payload={payload} /> : null}
-            </article>
-          )
-        })}
+      {info ? <p className="muted" role="status">{info}</p> : null}
+      <div className="stats">
+        <article>
+          <strong>{formatMoney(openSum)}</strong>
+          <span>em aberto</span>
+        </article>
+        <article>
+          <strong>{late.length}</strong>
+          <span>{late.length === 1 ? "vencida" : "vencidas"}</span>
+        </article>
+        <article>
+          <strong>{formatMoney(paidSum)}</strong>
+          <span>recebido</span>
+        </article>
       </div>
+      <div className="roster-tools">
+        <input
+          className="roster-search"
+          type="search"
+          value={search}
+          placeholder="Buscar aluno ou instrumento"
+          aria-label="Buscar mensalidade"
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="roster-filters" role="group" aria-label="Situação">
+          <button type="button" aria-pressed={view === "todas"} onClick={() => setView("todas")}>Todas</button>
+          <button type="button" aria-pressed={view === "aberta"} onClick={() => setView("aberta")}>Em aberto</button>
+          <button type="button" aria-pressed={view === "vencida"} onClick={() => setView("vencida")}>Vencidas</button>
+          <button type="button" aria-pressed={view === "paga"} onClick={() => setView("paga")}>Pagas</button>
+        </div>
+      </div>
+      {loading ? null : monthCharges.length === 0 ? (
+        <Empty>Nada neste mês. Gere as mensalidades das matrículas ativas.</Empty>
+      ) : visible.length === 0 ? (
+        <Empty>Nenhuma mensalidade encontrada.</Empty>
+      ) : (
+        <div className="stack">
+          {visible.map((charge) => {
+            const person = pessoas.get(charge.aluno_id)
+            const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
+            const tone = toneFor(instrumento)
+            const isLate = charge.situacao === "aberta" && charge.vencimento < today
+            const isPaid = charge.situacao === "paga"
+            let payload = ""
+            let link = ""
+            if (!isPaid && config?.chave_pix) {
+              payload = pixCopiaECola({
+                chave: config.chave_pix,
+                nome: config.nome_recebedor,
+                cidade: config.cidade_recebedor,
+                valor: charge.valor_centavos / 100,
+                txid: charge.pix_txid,
+              })
+              if (person?.telefone) {
+                link = whatsAppUrl(
+                  person.telefone,
+                  fillTemplate(config.mensagem_whatsapp, {
+                    nome: person.nome,
+                    instrumento,
+                    valor: formatMoney(charge.valor_centavos),
+                    vencimento: formatDate(charge.vencimento),
+                    pix: payload,
+                  }),
+                )
+              }
+            }
+            const when = isPaid ? paidOn(charge.paga_em) : formatDate(charge.vencimento)
+            return (
+              <article key={charge.id} className={`card enrollment pay-card${isPaid ? " is-paid" : ""}`}>
+                <span className="enrollment-bar" style={{ background: tone.bar }} />
+                <div className="row spread">
+                  <strong>
+                    {person ? <Link to={`/escola/alunos/${person.id}`}>{person.nome}</Link> : "Aluno"}
+                  </strong>
+                  <StatusBadge value={charge.situacao} />
+                </div>
+                <p className="muted">{instrumento}</p>
+                <p className="pay-amount">{formatMoney(charge.valor_centavos)}</p>
+                <p className={isLate ? "late" : "muted"}>
+                  {isPaid ? (when ? `Recebida em ${when}` : "Recebida") : isLate ? `Venceu em ${when}` : `Vence em ${when}`}
+                </p>
+                {charge.situacao === "aberta" ? (
+                  <div className="row">
+                    <button className="btn" type="button" onClick={() => void markPaid(charge.id)}>
+                      Dar baixa
+                    </button>
+                    {link ? (
+                      <a className="btn secondary" href={link} target="_blank" rel="noreferrer">
+                        WhatsApp
+                      </a>
+                    ) : !config?.chave_pix ? (
+                      <Link className="btn secondary" to="/escola/configuracao">Configurar Pix</Link>
+                    ) : (
+                      <span className="muted">Este aluno está sem telefone.</span>
+                    )}
+                    {payload ? (
+                      <button className="btn secondary" type="button" onClick={() => setPixId(pixId === charge.id ? null : charge.id)}>
+                        {pixId === charge.id ? "Ocultar Pix" : "Ver Pix"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+                {pixId === charge.id && payload ? <PixBlock payload={payload} /> : null}
+              </article>
+            )
+          })}
+        </div>
+      )}
     </Page>
   )
 }

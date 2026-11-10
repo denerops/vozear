@@ -6,8 +6,9 @@ import { LessonPage } from "./pages/LessonPage.tsx"
 import { LoginPage } from "./pages/LoginPage.tsx"
 import { AgendaPage } from "./pages/school/AgendaPage.tsx"
 import { BillingPage } from "./pages/school/BillingPage.tsx"
-import { PeoplePage } from "./pages/school/PeoplePage.tsx"
 import { StudentsPage } from "./pages/school/StudentsPage.tsx"
+import { TeacherPage } from "./pages/school/TeacherPage.tsx"
+import { TeachersPage } from "./pages/school/TeachersPage.tsx"
 import { SettingsPage } from "./pages/school/SettingsPage.tsx"
 import { StudentPage } from "./pages/school/StudentPage.tsx"
 import { TodayPage } from "./pages/school/TodayPage.tsx"
@@ -49,7 +50,8 @@ const router = createBrowserRouter(
                 { path: "/escola/agenda", element: <AgendaPage mode="escola" /> },
                 { path: "/escola/alunos", element: <StudentsPage /> },
                 { path: "/escola/alunos/:id", element: <StudentPage /> },
-                { path: "/escola/professores", element: <PeoplePage kind="professor" /> },
+                { path: "/escola/professores", element: <TeachersPage /> },
+                { path: "/escola/professores/:id", element: <TeacherPage /> },
                 { path: "/escola/mensalidades", element: <BillingPage /> },
                 { path: "/escola/configuracao", element: <SettingsPage /> },
                 { path: "/escola/aulas/:id", element: <LessonPage /> },

@@ -447,3 +447,48 @@ textarea { resize: vertical; }
   .roster-card:has(.badge) { grid-template-columns: auto minmax(0, 1fr); }
   .roster-card .badge { grid-column: 2; }
 }
+.card a, .sheet-card a { color: var(--burgundy); text-decoration: none; }
+.card a:hover, .sheet-card a:hover { text-decoration: underline; }
+.instrument-picks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.instrument-picks button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--ink);
+  padding: 0.45rem 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.instrument-picks button[aria-pressed="true"] { background: var(--burgundy); color: var(--on-stage); }
+.instrument-picks button:disabled { cursor: default; opacity: 0.72; }
+.instrument-picks i { width: 0.55rem; height: 0.55rem; border-radius: 999px; flex: none; }
+.sheet-card .eyebrow { color: var(--muted); }
+.month-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.month-nav strong {
+  min-width: 11rem;
+  color: var(--on-stage);
+  font-weight: 700;
+  text-align: center;
+}
+.month-nav button[aria-label] {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--on-stage);
+  cursor: pointer;
+  font-size: 1.25rem;
+}
+.month-nav button[aria-label]:hover { background: rgba(255, 248, 244, 0.12); }
+.pay-amount {
+  margin: 0;
+  color: var(--burgundy);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.pay-card.is-paid .pay-amount { color: var(--ink); }
