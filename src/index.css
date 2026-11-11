@@ -759,7 +759,7 @@ a.btn.danger {
 
 .lesson-list,
 .people { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
-.lesson-list a,
+.lesson-main,
 .people a,
 .people li > div {
   display: grid;
@@ -772,12 +772,16 @@ a.btn.danger {
   color: var(--ink);
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), transform 0.15s var(--ease);
 }
-.lesson-list a:hover { border-color: var(--line-strong); box-shadow: var(--sh-md); transform: translateY(-1px); }
-.lesson-list a strong { font-weight: 650; font-variant-numeric: tabular-nums; }
-.lesson-list a > span:nth-of-type(1) { font-weight: 600; }
-.lesson-list a > span:nth-of-type(n + 2) { color: var(--muted); font-size: 0.875rem; }
+.lesson-main:hover { border-color: var(--line-strong); box-shadow: var(--sh-md); transform: translateY(-1px); }
+.lesson-main strong { font-weight: 650; font-variant-numeric: tabular-nums; }
+.lesson-main > span:nth-of-type(1) { font-weight: 600; }
+.lesson-main > span:nth-of-type(n + 2) { color: var(--muted); font-size: 0.875rem; }
+.lesson-item { display: grid; gap: 0.45rem; }
+.lesson-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.confirm-actions { display: grid; gap: 0.6rem; }
 @media (min-width: 760px) {
-  .lesson-list a {
+  .lesson-item { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .lesson-main {
     grid-template-columns: 9.5rem minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
     align-items: center;
   }

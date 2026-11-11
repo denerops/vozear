@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { fillTemplate, unknownFields, whatsAppUrl } from "./whatsapp.ts"
+import { confirmationMessage, fillTemplate, unknownFields, whatsAppUrl } from "./whatsapp.ts"
 
 describe("whatsapp", () => {
   it("monta o link com DDI e a mensagem", () => {
@@ -11,6 +11,12 @@ describe("whatsapp", () => {
   it("aponta campos que a mensagem não conhece", () => {
     expect(unknownFields("Oi {nome}, {valor} {pix} {mes} {mes} {turma}")).toEqual(["mes", "turma"])
     expect(unknownFields("Sem campos")).toEqual([])
+  })
+
+  it("escreve o convite de confirmação para o aluno", () => {
+    expect(confirmationMessage("Caio Teste", "Canto", "seg., 16 de nov., 08:00", "https://vozear.test/confirmar/abc")).toBe(
+      "Oi, Caio! Sua aula de Canto é seg., 16 de nov., 08:00.\n\nConfirme ou cancele por aqui:\nhttps://vozear.test/confirmar/abc",
+    )
   })
 
   it("preenche os campos da cobrança", () => {

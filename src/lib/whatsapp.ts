@@ -25,6 +25,16 @@ export function fillTemplate(template: string, values: Record<string, string>) {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "")
 }
 
+export function confirmationMessage(nome: string, instrumento: string, quando: string, url: string) {
+  const first = nome.trim().split(/\s+/)[0] || "olá"
+  return `Oi, ${first}! Sua aula de ${instrumento} é ${quando}.\n\nConfirme ou cancele por aqui:\n${url}`
+}
+
+export function confirmationUrl(token: string) {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "")
+  return `${window.location.origin}${base}/confirmar/${token}`
+}
+
 export function whatsAppUrl(phone: string, text: string) {
   return `https://wa.me/${brazilPhone(phone)}?text=${encodeURIComponent(text)}`
 }

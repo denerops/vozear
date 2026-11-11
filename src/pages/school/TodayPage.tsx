@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom"
 import { Empty, ErrorNote, ListSkeleton, Page, StatsSkeleton, StatusBadge } from "../../components/ui.tsx"
-import { loadAulas, loadInstrumentos, loadMensalidades, nomesPorId } from "../../data/api.ts"
+import { loadAulas, loadInstrumentos, loadMensalidades, loadPessoas, nomesPorId } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { addDays, formatWhen, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
 import { formatMoney } from "../../lib/format.ts"
+import { client } from "../../lib/supabase.ts"
+import { confirmationMessage, confirmationUrl, whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Aula, Mensalidade } from "../../types.ts"
 
 type TodayData = {
@@ -11,6 +13,12 @@ type TodayData = {
   abertas: Mensalidade[]
   nomes: Map<string, string>
   instrumentos: Map<string, string>
+  telefones: Map<string, string>
+  tokens: Map<string, string>
+}
+
+function lessonOpen(aula: Aula) {
+  return (aula.situacao === "prevista" || aula.situacao === "remarcada") && new Date(aula.inicio).getTime() > Date.now()
 }
 
 export function TodayPage() {
@@ -25,21 +33,35 @@ export function TodayPage() {
       loadInstrumentos(),
     ])
     const open = charges.filter((item) => item.situacao === "aberta")
-    const names = await nomesPorId([
-      ...lessons.flatMap((lesson) => [lesson.aluno_id, lesson.professor_id]),
-      ...open.map((item) => item.aluno_id),
+    const openLessons = lessons.filter(lessonOpen)
+    const [names, alunos, tokenResult] = await Promise.all([
+      nomesPorId([
+        ...lessons.flatMap((lesson) => [lesson.aluno_id, lesson.professor_id]),
+        ...open.map((item) => item.aluno_id),
+      ]),
+      loadPessoas("aluno"),
+      openLessons.length === 0
+        ? Promise.resolve({ data: [] as { aula_id: string; token: string }[], error: null })
+        : client().rpc("tokens_confirmacao", { p_aula_ids: openLessons.map((lesson) => lesson.id) }),
     ])
+    if (tokenResult.error) throw tokenResult.error
     return {
       aulas: lessons,
       abertas: open,
       nomes: names,
       instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
+      telefones: new Map(alunos.map((person) => [person.id, person.telefone])),
+      tokens: new Map(
+        ((tokenResult.data ?? []) as { aula_id: string; token: string }[]).map((item) => [item.aula_id, item.token]),
+      ),
     }
   })
   const aulas = query.data?.aulas ?? []
   const abertas = query.data?.abertas ?? []
   const nomes = query.data?.nomes ?? new Map<string, string>()
   const instrumentos = query.data?.instrumentos ?? new Map<string, string>()
+  const telefones = query.data?.telefones ?? new Map<string, string>()
+  const tokens = query.data?.tokens ?? new Map<string, string>()
   const loading = query.pending && !query.data
 
   const atrasadas = abertas.filter((item) => item.vencimento < today)
@@ -72,17 +94,42 @@ export function TodayPage() {
         <h2>Aulas</h2>
         {aulas.length === 0 ? <Empty>Nenhuma aula hoje.</Empty> : null}
         <ul className="lesson-list">
-          {aulas.map((aula) => (
-            <li key={aula.id}>
-              <Link to={`/escola/aulas/${aula.id}`}>
-                <strong>{formatWhen(aula.inicio)}</strong>
-                <span>{nomes.get(aula.aluno_id)}</span>
-                <span>{instrumentos.get(aula.instrumento_id)}</span>
-                <span>{nomes.get(aula.professor_id)}</span>
-                <StatusBadge value={aula.situacao} />
-              </Link>
-            </li>
-          ))}
+          {aulas.map((aula) => {
+            const nome = nomes.get(aula.aluno_id) ?? "Aluno"
+            const instrumento = instrumentos.get(aula.instrumento_id) ?? "Aula"
+            const telefone = telefones.get(aula.aluno_id) ?? ""
+            const token = tokens.get(aula.id) ?? ""
+            const open = lessonOpen(aula)
+            const link = open && token && telefone
+              ? whatsAppUrl(telefone, confirmationMessage(nome, instrumento, formatWhen(aula.inicio), confirmationUrl(token)))
+              : ""
+            return (
+              <li key={aula.id} className="lesson-item">
+                <Link className="lesson-main" to={`/escola/aulas/${aula.id}`}>
+                  <strong>{formatWhen(aula.inicio)}</strong>
+                  <span>{nome}</span>
+                  <span>{instrumento}</span>
+                  <span>{nomes.get(aula.professor_id)}</span>
+                  <span className="lesson-actions">
+                    <StatusBadge value={aula.situacao} />
+                    {aula.confirmacao === "confirmada" ? (
+                      <span className="badge" data-status="realizada">Confirmada</span>
+                    ) : null}
+                    {open && aula.confirmacao === "pendente" ? (
+                      <span className="badge" data-status="aberta">Aguardando</span>
+                    ) : null}
+                  </span>
+                </Link>
+                {link ? (
+                  <a className="btn secondary" href={link} target="_blank" rel="noreferrer">
+                    Enviar confirmação
+                  </a>
+                ) : open && !telefone ? (
+                  <span className="muted">Sem telefone</span>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
       </section>
       {atrasadas.length > 0 ? (

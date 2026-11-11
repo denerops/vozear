@@ -2,6 +2,8 @@ export type Papel = "administrador" | "professor" | "aluno"
 
 export type SituacaoAula = "prevista" | "realizada" | "falta" | "cancelada" | "remarcada"
 
+export type ConfirmacaoPresenca = "pendente" | "confirmada" | "cancelada"
+
 export type SituacaoMatricula = "ativa" | "encerrada"
 
 export type SituacaoMensalidade = "aberta" | "paga"
@@ -59,9 +61,21 @@ export type Aula = {
   inicio: string
   duracao_minutos: number
   situacao: SituacaoAula
+  confirmacao: ConfirmacaoPresenca
   professor_id: string
   aluno_id: string
   instrumento_id: string
+}
+
+export type ConfirmacaoAula = {
+  instrumento: string
+  professor: string
+  aluno: string
+  inicio: string
+  duracao_minutos: number
+  situacao: SituacaoAula
+  confirmacao: ConfirmacaoPresenca
+  aberta: boolean
 }
 
 export type RecadoLink = {

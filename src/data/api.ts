@@ -127,7 +127,7 @@ export async function loadMatriculas(filter?: { professorId?: string; alunoId?: 
 export async function loadAulas(filter: { from: string; until: string; professorId?: string; alunoId?: string }) {
   const data = await rows<Aula>(
     "aulas",
-    "id, matricula_id, data_serie, inicio, duracao_minutos, situacao, professor_id, aluno_id, instrumento_id",
+    "id, matricula_id, data_serie, inicio, duracao_minutos, situacao, confirmacao, professor_id, aluno_id, instrumento_id",
     (query) => {
       let next = query.gte("inicio", filter.from).lt("inicio", filter.until).order("inicio")
       if (filter.professorId) next = next.eq("professor_id", filter.professorId)
@@ -141,7 +141,7 @@ export async function loadAulas(filter: { from: string; until: string; professor
 export async function loadAula(id: string) {
   const { data, error } = await client()
     .from("aulas")
-    .select("id, matricula_id, data_serie, inicio, duracao_minutos, situacao, professor_id, aluno_id, instrumento_id")
+    .select("id, matricula_id, data_serie, inicio, duracao_minutos, situacao, confirmacao, professor_id, aluno_id, instrumento_id")
     .eq("id", id)
     .maybeSingle()
   if (error) throw error

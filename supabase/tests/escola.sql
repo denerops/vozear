@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(19);
+select plan(33);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -85,6 +85,37 @@ select
   '2026-11-17',
   '2026-11-17 19:00:00-03',
   50,
+  '22222222-2222-2222-2222-222222222222',
+  '33333333-3333-3333-3333-333333333333',
+  id
+from public.instrumentos
+where nome = 'Violão';
+
+insert into public.aulas (
+  id, matricula_id, data_serie, inicio, duracao_minutos, professor_id, aluno_id, instrumento_id
+)
+select
+  '99999999-9999-9999-9999-999999999999',
+  '66666666-6666-6666-6666-666666666666',
+  '2027-06-01',
+  '2027-06-01 15:00:00-03',
+  50,
+  '22222222-2222-2222-2222-222222222222',
+  '33333333-3333-3333-3333-333333333333',
+  id
+from public.instrumentos
+where nome = 'Violão';
+
+insert into public.aulas (
+  id, matricula_id, data_serie, inicio, duracao_minutos, situacao, professor_id, aluno_id, instrumento_id
+)
+select
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  '66666666-6666-6666-6666-666666666666',
+  '2020-01-07',
+  '2020-01-07 15:00:00-03',
+  50,
+  'realizada',
   '22222222-2222-2222-2222-222222222222',
   '33333333-3333-3333-3333-333333333333',
   id
@@ -218,6 +249,92 @@ select throws_ok(
   '23P01',
   'conflicting key value violates exclusion constraint "aulas_professor_sem_sobreposicao"',
   'remarcação não pode cair em cima de outra aula'
+);
+
+select throws_ok(
+  $$ select confirmacao_token from public.aulas limit 1 $$,
+  '42501',
+  'o token não sai na leitura da aula'
+);
+
+select set_config(
+  'test.token',
+  (select token from public.tokens_confirmacao(array['99999999-9999-9999-9999-999999999999']::uuid[])),
+  true
+);
+select is(char_length(current_setting('test.token')), 64, 'o link de confirmação tem token longo');
+select is(
+  (select token from public.tokens_confirmacao(array['99999999-9999-9999-9999-999999999999']::uuid[])),
+  current_setting('test.token'),
+  'o mesmo link é reaproveitado'
+);
+select set_config(
+  'test.passado',
+  (select token from public.tokens_confirmacao(array['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']::uuid[])),
+  true
+);
+
+set local role anon;
+select is(public.ver_confirmacao('curto'), null, 'token malformado não revela aula');
+select is(
+  public.ver_confirmacao(current_setting('test.token')) ->> 'instrumento',
+  'Violão',
+  'o link mostra o instrumento'
+);
+select is(
+  position('11922222222' in public.ver_confirmacao(current_setting('test.token'))::text),
+  0,
+  'o link não leva o telefone'
+);
+select is(
+  public.responder_confirmacao(current_setting('test.token'), 'confirmar') ->> 'confirmacao',
+  'confirmada',
+  'aluno confirma sem login'
+);
+select is(
+  public.ver_confirmacao(current_setting('test.token')) ->> 'situacao',
+  'prevista',
+  'confirmar não encerra a aula'
+);
+select is(
+  public.responder_confirmacao(current_setting('test.token'), 'cancelar') ->> 'situacao',
+  'cancelada',
+  'aluno cancela a aula pelo link'
+);
+select throws_ok(
+  $$ select public.responder_confirmacao(current_setting('test.token'), 'confirmar') $$,
+  'P0001',
+  'esta aula foi cancelada',
+  'aula cancelada não volta pelo link'
+);
+select throws_ok(
+  $$ select public.responder_confirmacao('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'cancelar') $$,
+  'P0001',
+  'link inválido',
+  'token desconhecido não cancela nada'
+);
+select throws_ok(
+  $$ select public.responder_confirmacao(current_setting('test.passado'), 'confirmar') $$,
+  'P0001',
+  'esta aula não aceita mais confirmação',
+  'aula já registrada não muda pelo link'
+);
+select throws_ok(
+  $$ select * from public.tokens_confirmacao(array['99999999-9999-9999-9999-999999999999']::uuid[]) $$,
+  '42501',
+  'visitante não gera link'
+);
+
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}',
+  true
+);
+set local role authenticated;
+select is_empty(
+  $$ select * from public.tokens_confirmacao(array['99999999-9999-9999-9999-999999999999']::uuid[]) $$,
+  'aluno não gera o próprio link por dentro da escola'
 );
 
 select * from finish();

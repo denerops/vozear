@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { RequireAuth, RequirePapel, HomeRedirect } from "./auth/guards.tsx"
 import { Shell } from "./components/Shell.tsx"
 import { AccessPage } from "./pages/AccessPage.tsx"
+import { ConfirmLessonPage } from "./pages/ConfirmLessonPage.tsx"
 import { LessonPage } from "./pages/LessonPage.tsx"
 import { LoginPage } from "./pages/LoginPage.tsx"
 import { AgendaPage } from "./pages/school/AgendaPage.tsx"
@@ -21,6 +22,7 @@ const router = createBrowserRouter(
   [
     { path: "/login", element: <LoginPage /> },
     { path: "/acesso", element: <AccessPage /> },
+    { path: "/confirmar/:token", element: <ConfirmLessonPage /> },
     { path: "/", element: <HomeRedirect /> },
     {
       element: <RequireAuth />,

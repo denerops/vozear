@@ -33,6 +33,7 @@ function lesson(patch: Partial<Aula>): Aula {
     aluno_id: "aluno",
     instrumento_id: "inst",
     ...patch,
+    confirmacao: patch.confirmacao ?? "pendente",
   }
 }
 
