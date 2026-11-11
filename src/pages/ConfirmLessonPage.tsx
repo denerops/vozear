@@ -19,7 +19,6 @@ export function ConfirmLessonPage() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [arming, setArming] = useState(false)
-  const [left, setLeft] = useState(false)
   const lesson = answer ?? query.data ?? null
 
   async function respond(resposta: "confirmar" | "cancelar") {
@@ -68,9 +67,7 @@ export function ConfirmLessonPage() {
                   <strong>Aula confirmada</strong>
                   <span>A escola já recebeu a sua presença.</span>
                 </div>
-                {left ? (
-                  <p>Pode fechar esta página.</p>
-                ) : arming ? (
+                {arming ? (
                   <>
                     <p>Cancelar cancela só esta data.</p>
                     <div className="confirm-row">
@@ -83,14 +80,9 @@ export function ConfirmLessonPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="confirm-row">
-                    <button className="btn danger" type="button" disabled={pending} onClick={() => setArming(true)}>
-                      Cancelar aula
-                    </button>
-                    <button className="btn secondary" type="button" onClick={() => setLeft(true)}>
-                      Sair
-                    </button>
-                  </div>
+                  <button className="btn danger" type="button" disabled={pending} onClick={() => setArming(true)}>
+                    Cancelar aula
+                  </button>
                 )}
               </div>
             ) : (
