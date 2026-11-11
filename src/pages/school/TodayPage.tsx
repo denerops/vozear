@@ -2,7 +2,7 @@ import { Link } from "react-router-dom"
 import { Empty, ErrorNote, ListSkeleton, Page, StatsSkeleton, StatusBadge } from "../../components/ui.tsx"
 import { loadAulas, loadInstrumentos, loadMensalidades, loadPessoas, nomesPorId } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
-import { addDays, formatWhen, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
+import { addDays, formatMinute, formatWhen, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
 import { formatMoney } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import { confirmationMessage, confirmationUrl, whatsAppUrl } from "../../lib/whatsapp.ts"
@@ -93,10 +93,11 @@ export function TodayPage() {
       <section className="stack">
         <h2>Aulas</h2>
         {aulas.length === 0 ? <Empty>Nenhuma aula hoje.</Empty> : null}
-        <ul className="lesson-list">
+        <ul className="today-list">
           {aulas.map((aula) => {
             const nome = nomes.get(aula.aluno_id) ?? "Aluno"
             const instrumento = instrumentos.get(aula.instrumento_id) ?? "Aula"
+            const professor = nomes.get(aula.professor_id) ?? "Professor"
             const telefone = telefones.get(aula.aluno_id) ?? ""
             const token = tokens.get(aula.id) ?? ""
             const open = lessonOpen(aula)
@@ -104,12 +105,13 @@ export function TodayPage() {
               ? whatsAppUrl(telefone, confirmationMessage(nome, instrumento, formatWhen(aula.inicio), confirmationUrl(token)))
               : ""
             return (
-              <li key={aula.id} className="lesson-item">
-                <Link className="lesson-main" to={`/escola/aulas/${aula.id}`}>
-                  <strong>{formatWhen(aula.inicio)}</strong>
-                  <span>{nome}</span>
-                  <span>{instrumento}</span>
-                  <span>{nomes.get(aula.professor_id)}</span>
+              <li key={aula.id} className="today-lesson">
+                <Link className="today-lesson-main" to={`/escola/aulas/${aula.id}`}>
+                  <time dateTime={aula.inicio}>{formatMinute(saoPauloClock(aula.inicio).minute)}</time>
+                  <span>
+                    <strong>{nome}</strong>
+                    <span className="today-meta">{instrumento} · {professor}</span>
+                  </span>
                   <span className="lesson-actions">
                     <StatusBadge value={aula.situacao} />
                     {aula.confirmacao === "confirmada" ? (
@@ -125,7 +127,7 @@ export function TodayPage() {
                     Enviar confirmação
                   </a>
                 ) : open && !telefone ? (
-                  <span className="muted">Sem telefone</span>
+                  <span className="today-note">Sem telefone</span>
                 ) : null}
               </li>
             )

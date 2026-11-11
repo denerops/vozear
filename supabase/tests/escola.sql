@@ -254,6 +254,7 @@ select throws_ok(
 select throws_ok(
   $$ select confirmacao_token from public.aulas limit 1 $$,
   '42501',
+  'permission denied for column confirmacao_token',
   'o token não sai na leitura da aula'
 );
 
@@ -322,6 +323,7 @@ select throws_ok(
 select throws_ok(
   $$ select * from public.tokens_confirmacao(array['99999999-9999-9999-9999-999999999999']::uuid[]) $$,
   '42501',
+  'permission denied for function tokens_confirmacao',
   'visitante não gera link'
 );
 

@@ -19,6 +19,7 @@ export function ConfirmLessonPage() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [arming, setArming] = useState(false)
+  const [left, setLeft] = useState(false)
   const lesson = answer ?? query.data ?? null
 
   async function respond(resposta: "confirmar" | "cancelar") {
@@ -61,14 +62,43 @@ export function ConfirmLessonPage() {
               <p>Esta aula foi cancelada.</p>
             ) : !lesson.aberta ? (
               <p>Esta aula não aceita mais confirmação.</p>
+            ) : lesson.confirmacao === "confirmada" ? (
+              <div className="confirm-actions">
+                <div className="confirm-banner" role="status">
+                  <strong>Aula confirmada</strong>
+                  <span>A escola já recebeu a sua presença.</span>
+                </div>
+                {left ? (
+                  <p>Pode fechar esta página.</p>
+                ) : arming ? (
+                  <>
+                    <p>Cancelar cancela só esta data.</p>
+                    <div className="confirm-row">
+                      <button className="btn danger" type="button" disabled={pending} onClick={() => void respond("cancelar")}>
+                        {pending ? "Cancelando…" : "Cancelar aula"}
+                      </button>
+                      <button className="btn secondary" type="button" disabled={pending} onClick={() => setArming(false)}>
+                        Voltar
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="confirm-row">
+                    <button className="btn danger" type="button" disabled={pending} onClick={() => setArming(true)}>
+                      Cancelar aula
+                    </button>
+                    <button className="btn secondary" type="button" onClick={() => setLeft(true)}>
+                      Sair
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="confirm-actions">
-                {lesson.confirmacao === "confirmada" ? <p>Presença confirmada.</p> : <p>Você vai a esta aula?</p>}
-                {lesson.confirmacao === "confirmada" ? null : (
-                  <button className="btn" type="button" disabled={pending} onClick={() => void respond("confirmar")}>
-                    {pending && !arming ? "Confirmando…" : "Confirmar presença"}
-                  </button>
-                )}
+                <p>Você vai a esta aula?</p>
+                <button className="btn" type="button" disabled={pending} onClick={() => void respond("confirmar")}>
+                  {pending ? "Confirmando…" : "Confirmar presença"}
+                </button>
                 {arming ? (
                   <>
                     <p>Cancelar cancela só esta data.</p>
