@@ -1157,7 +1157,14 @@ a.btn.danger {
 .student-hero { display: flex; align-items: center; gap: 1rem; min-width: 0; }
 .student-avatar { width: 4.4rem; height: 4.4rem; font-size: 1.55rem; }
 .student-identity { min-width: 0; flex: 1; }
-.student-identity h1 { font-size: clamp(1.8rem, 3vw, 2.35rem); }
+.student-identity h1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: clamp(1.8rem, 3vw, 2.35rem);
+}
+.hero-badge { font-family: var(--sans); letter-spacing: 0; }
 .student-identity p {
   display: flex;
   flex-wrap: wrap;
@@ -1193,6 +1200,7 @@ a.btn.danger {
 .student-tabs button[aria-selected="true"] { background: var(--brand); color: #fff; }
 .student-kpis { margin-top: -0.15rem; }
 .student-board { display: grid; gap: 0.9rem; align-items: start; }
+.student-side { display: grid; gap: 0.9rem; align-content: start; }
 .panel {
   display: grid;
   gap: 0.85rem;
