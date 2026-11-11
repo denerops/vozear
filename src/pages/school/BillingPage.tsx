@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Page, StatsSkeleton, StatusBadge } from "../../components/ui.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMensalidades, loadPessoas } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { currentMonth, formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
@@ -34,56 +35,48 @@ function paidOn(value: string | null) {
   return formatDate(value.slice(0, 10))
 }
 
+type BillingData = {
+  charges: Mensalidade[]
+  people: Pessoa[]
+  config: Configuracao | null
+  instrumentos: Map<string, string>
+}
+
+async function loadBilling(month: string): Promise<BillingData> {
+  if (month === currentMonth()) {
+    const { error: generateError } = await client().rpc("gerar_mensalidades", {
+      p_competencia: `${month}-01`,
+    })
+    if (generateError) throw generateError
+  }
+  const [items, students, school, instruments] = await Promise.all([
+    loadMensalidades(),
+    loadPessoas("aluno"),
+    loadConfiguracao(),
+    loadInstrumentos(),
+  ])
+  return {
+    charges: items,
+    people: students,
+    config: school,
+    instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
+  }
+}
+
 export function BillingPage() {
   const [month, setMonth] = useState(currentMonth())
-  const [charges, setCharges] = useState<Mensalidade[]>([])
-  const [people, setPeople] = useState<Pessoa[]>([])
-  const [config, setConfig] = useState<Configuracao | null>(null)
-  const [instrumentos, setInstrumentos] = useState<Map<string, string>>(new Map())
-  const [error, setError] = useState<string | null>(null)
+  const billing = useQuery(`escola:mensalidades:${month}`, () => loadBilling(month))
+  const charges = billing.data?.charges ?? []
+  const people = billing.data?.people ?? []
+  const config = billing.data?.config ?? null
+  const instrumentos = billing.data?.instrumentos ?? new Map<string, string>()
+  const [payError, setPayError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const loading = billing.pending && !billing.data
   const [view, setView] = useState<View>("todas")
   const [search, setSearch] = useState("")
   const [pixId, setPixId] = useState<string | null>(null)
   const today = saoPauloDate()
-
-  async function reload() {
-    const [items, students, school, instruments] = await Promise.all([
-      loadMensalidades(),
-      loadPessoas("aluno"),
-      loadConfiguracao(),
-      loadInstrumentos(),
-    ])
-    setCharges(items)
-    setPeople(students)
-    setConfig(school)
-    setInstrumentos(new Map(instruments.map((item) => [item.id, item.nome])))
-  }
-
-  useEffect(() => {
-    let alive = true
-    setLoading(true)
-    async function openMonth() {
-      if (month === currentMonth()) {
-        const { error: generateError } = await client().rpc("gerar_mensalidades", {
-          p_competencia: `${month}-01`,
-        })
-        if (generateError) throw generateError
-      }
-      if (alive) await reload()
-    }
-    openMonth()
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [month])
 
   const pessoas = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
   const monthCharges = charges.filter((item) => item.competencia.startsWith(month))
@@ -110,19 +103,19 @@ export function BillingPage() {
     })
 
   async function markPaid(id: string) {
-    setError(null)
+    setPayError(null)
     setInfo(null)
     const { error: payError } = await client().rpc("baixar_mensalidade", { p_id: id })
-    if (payError) setError(humanError(payError))
+    if (payError) setPayError(humanError(payError))
     else {
       setPixId(null)
       setInfo("Baixa registrada.")
-      await reload()
+      await billing.refresh()
     }
   }
 
   const lede = loading
-    ? "Carregando…"
+    ? "Buscando mensalidades…"
     : monthCharges.length === 0
       ? month === currentMonth()
         ? "Nenhuma matrícula ativa."
@@ -145,9 +138,9 @@ export function BillingPage() {
         </div>
       }
     >
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{payError ?? billing.error}</ErrorNote>
       {info ? <p className="muted" role="status">{info}</p> : null}
-      <div className="stats">
+      {loading ? <StatsSkeleton /> : <div className="stats">
         <article>
           <strong>{formatMoney(openSum)}</strong>
           <span>em aberto</span>
@@ -160,7 +153,7 @@ export function BillingPage() {
           <strong>{formatMoney(paidSum)}</strong>
           <span>recebido</span>
         </article>
-      </div>
+      </div>}
       <div className="roster-tools">
         <input
           className="roster-search"
@@ -177,7 +170,9 @@ export function BillingPage() {
           <button type="button" aria-pressed={view === "paga"} onClick={() => setView("paga")}>Pagas</button>
         </div>
       </div>
-      {loading ? null : monthCharges.length === 0 ? (
+      {loading ? (
+        <CardSkeleton />
+      ) : monthCharges.length === 0 ? (
         <Empty>
           {month === currentMonth() ? "Nenhuma matrícula ativa para cobrar." : "Nenhuma mensalidade neste mês."}
         </Empty>

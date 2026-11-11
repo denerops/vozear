@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { Session } from "@supabase/supabase-js"
+import { forgetAll } from "../data/memory.ts"
 import { isSupabaseConfigured, supabase } from "../lib/supabase.ts"
 import type { Papel } from "../types.ts"
 
@@ -73,6 +74,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       nome,
       papeis,
       signOut: async () => {
+        forgetAll()
         await supabase?.auth.signOut()
       },
     }),

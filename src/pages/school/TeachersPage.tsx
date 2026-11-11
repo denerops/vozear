@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
-import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
+import { Empty, ErrorNote, ListSkeleton, Page } from "../../components/ui.tsx"
 import { loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, formatMinute } from "../../lib/dates.ts"
-import { humanError } from "../../lib/errors.ts"
 import { accessRedirect, formatPhone } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
@@ -63,44 +63,39 @@ export function InstrumentPicks({
   )
 }
 
+type TeachersData = {
+  people: Pessoa[]
+  instruments: Instrumento[]
+  matriculas: Matricula[]
+  students: Map<string, string>
+}
+
+async function loadTeachers(): Promise<TeachersData> {
+  const [teachers, instrumentList, enrollments, alunos] = await Promise.all([
+    loadPessoas("professor"),
+    loadInstrumentos(),
+    loadMatriculas(),
+    loadPessoas("aluno"),
+  ])
+  return {
+    people: teachers,
+    instruments: instrumentList,
+    matriculas: enrollments,
+    students: new Map(alunos.map((person) => [person.id, person.nome])),
+  }
+}
+
 export function TeachersPage() {
-  const [people, setPeople] = useState<Pessoa[]>([])
-  const [instruments, setInstruments] = useState<Instrumento[]>([])
-  const [matriculas, setMatriculas] = useState<Matricula[]>([])
-  const [students, setStudents] = useState<Map<string, string>>(new Map())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const list = useQuery("escola:professores", loadTeachers)
+  const people = list.data?.people ?? []
+  const instruments = list.data?.instruments ?? []
+  const matriculas = list.data?.matriculas ?? []
+  const students = list.data?.students ?? new Map<string, string>()
+  const loading = list.pending && !list.data
   const [search, setSearch] = useState("")
   const [view, setView] = useState<View>("todos")
   const [instrumentId, setInstrumentId] = useState("")
   const [inviting, setInviting] = useState(false)
-
-  async function reload() {
-    const [teachers, instrumentList, enrollments, alunos] = await Promise.all([
-      loadPessoas("professor"),
-      loadInstrumentos(),
-      loadMatriculas(),
-      loadPessoas("aluno"),
-    ])
-    setPeople(teachers)
-    setInstruments(instrumentList)
-    setMatriculas(enrollments)
-    setStudents(new Map(alunos.map((person) => [person.id, person.nome])))
-  }
-
-  useEffect(() => {
-    let alive = true
-    reload()
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
 
   const names = useMemo(() => new Map(instruments.map((item) => [item.id, item.nome])), [instruments])
   const activeByTeacher = useMemo(() => {
@@ -147,7 +142,7 @@ export function TeachersPage() {
   })
 
   const lede = loading
-    ? "Carregando…"
+    ? "Buscando professores…"
     : `${people.length} ${people.length === 1 ? "professor" : "professores"} · ${withStudents} com alunos`
 
   return (
@@ -160,7 +155,7 @@ export function TeachersPage() {
         </button>
       }
     >
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{list.error}</ErrorNote>
       <div className="roster-tools">
         <input
           className="roster-search"
@@ -204,7 +199,7 @@ export function TeachersPage() {
         ) : null}
       </div>
 
-      {loading ? null : people.length === 0 ? (
+      {loading ? <ListSkeleton /> : people.length === 0 ? (
         <Empty>Nenhum professor ainda. O convite chega por e-mail e a pessoa cria a própria senha.</Empty>
       ) : visible.length === 0 ? (
         <Empty>Nenhum professor encontrado.</Empty>
@@ -261,7 +256,7 @@ export function TeachersPage() {
           onClose={() => setInviting(false)}
           onCreated={async () => {
             setInviting(false)
-            await reload()
+            await list.refresh()
           }}
         />
       ) : null}

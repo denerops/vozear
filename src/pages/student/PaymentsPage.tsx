@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react"
 import { useSession } from "../../auth/session.tsx"
 import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMensalidades } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
-import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
 import { pixCopiaECola } from "../../lib/pix.ts"
 import type { Configuracao, Mensalidade } from "../../types.ts"
@@ -20,35 +19,31 @@ function paidOn(value: string | null) {
   return formatDate(value.slice(0, 10))
 }
 
+type PaymentsData = {
+  charges: Mensalidade[]
+  config: Configuracao | null
+  instrumentos: Map<string, string>
+}
+
 export function PaymentsPage() {
   const session = useSession()
-  const [charges, setCharges] = useState<Mensalidade[]>([])
-  const [config, setConfig] = useState<Configuracao | null>(null)
-  const [instrumentos, setInstrumentos] = useState<Map<string, string>>(new Map())
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const query = useQuery(session.userId ? `aluno:pagamentos:${session.userId}` : null, async () => {
+    const [items, school, instruments] = await Promise.all([
+      loadMensalidades(session.userId ?? undefined),
+      loadConfiguracao(),
+      loadInstrumentos(),
+    ])
+    return {
+      charges: items,
+      config: school,
+      instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
+    } satisfies PaymentsData
+  })
+  const charges = query.data?.charges ?? []
+  const config = query.data?.config ?? null
+  const instrumentos = query.data?.instrumentos ?? new Map<string, string>()
+  const loading = query.pending && !query.data
   const today = saoPauloDate()
-
-  useEffect(() => {
-    if (!session.userId) return
-    let alive = true
-    Promise.all([loadMensalidades(session.userId), loadConfiguracao(), loadInstrumentos()])
-      .then(([items, school, instruments]) => {
-        if (!alive) return
-        setCharges(items)
-        setConfig(school)
-        setInstrumentos(new Map(instruments.map((item) => [item.id, item.nome])))
-      })
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [session.userId])
 
   const open = charges
     .filter((item) => item.situacao === "aberta")
@@ -61,10 +56,10 @@ export function PaymentsPage() {
   return (
     <Page
       title="Pagamentos"
-      lede={loading ? "Carregando…" : open.length === 0 ? "Nada em aberto." : `${formatMoney(due)} em aberto`}
+      lede={loading ? "Buscando pagamentos…" : open.length === 0 ? "Nada em aberto." : `${formatMoney(due)} em aberto`}
     >
-      <ErrorNote>{error}</ErrorNote>
-      {loading ? null : charges.length === 0 ? (
+      <ErrorNote>{query.error}</ErrorNote>
+      {loading ? <CardSkeleton /> : charges.length === 0 ? (
         <Empty>Nenhuma mensalidade ainda.</Empty>
       ) : (
         <>

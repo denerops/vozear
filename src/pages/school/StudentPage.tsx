@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
-import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Page } from "../../components/ui.tsx"
 import { loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, formatMinute } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney, formatPhone } from "../../lib/format.ts"
@@ -27,25 +28,31 @@ function centsOf(value: string) {
   return Number.isFinite(cents) ? cents : 0
 }
 
+type StudentForm = {
+  telefone: string
+  instagram: string
+  outraRede: string
+  nascimento: string
+  observacao: string
+  precos: Record<string, string>
+}
+
+function studentForm(person: Pessoa, enrollments: Matricula[]): StudentForm {
+  return {
+    telefone: person.telefone,
+    instagram: person.instagram,
+    outraRede: person.outraRede,
+    nascimento: person.nascimento ?? "",
+    observacao: person.observacao,
+    precos: Object.fromEntries(
+      enrollments.map((item) => [item.id, (item.valor_mensal_centavos / 100).toFixed(2).replace(".", ",")]),
+    ),
+  }
+}
+
 export function StudentPage() {
   const { id = "" } = useParams()
-  const [person, setPerson] = useState<Pessoa | null>(null)
-  const [matriculas, setMatriculas] = useState<Matricula[]>([])
-  const [instrumentos, setInstrumentos] = useState<Map<string, string>>(new Map())
-  const [professores, setProfessores] = useState<Map<string, string>>(new Map())
-  const [openFees, setOpenFees] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [telefone, setTelefone] = useState("")
-  const [instagram, setInstagram] = useState("")
-  const [outraRede, setOutraRede] = useState("")
-  const [nascimento, setNascimento] = useState("")
-  const [observacao, setObservacao] = useState("")
-  const [precos, setPrecos] = useState<Record<string, string>>({})
-
-  async function reload() {
+  const query = useQuery(id ? `escola:aluno:${id}` : null, async () => {
     const [students, enrollments, instruments, teachers, charges] = await Promise.all([
       loadPessoas("aluno"),
       loadMatriculas({ alunoId: id }),
@@ -53,40 +60,52 @@ export function StudentPage() {
       loadPessoas("professor"),
       loadMensalidades(id),
     ])
-    const found = students.find((item) => item.id === id) ?? null
-    setPerson(found)
-    setMatriculas(enrollments)
-    setInstrumentos(new Map(instruments.map((item) => [item.id, item.nome])))
-    setProfessores(new Map(teachers.map((item) => [item.id, item.nome])))
-    setOpenFees(charges.filter((item) => item.situacao === "aberta").length)
-    if (found) {
-      setTelefone(found.telefone)
-      setInstagram(found.instagram)
-      setOutraRede(found.outraRede)
-      setNascimento(found.nascimento ?? "")
-      setObservacao(found.observacao)
-      setPrecos(
-        Object.fromEntries(
-          enrollments.map((item) => [item.id, (item.valor_mensal_centavos / 100).toFixed(2).replace(".", ",")]),
-        ),
-      )
+    return {
+      person: students.find((item) => item.id === id) ?? null,
+      matriculas: enrollments,
+      instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
+      professores: new Map(teachers.map((item) => [item.id, item.nome])),
+      openFees: charges.filter((item) => item.situacao === "aberta").length,
     }
-  }
+  })
+  const person = query.data?.person ?? null
+  const matriculas = query.data?.matriculas ?? []
+  const instrumentos = query.data?.instrumentos ?? new Map<string, string>()
+  const professores = query.data?.professores ?? new Map<string, string>()
+  const openFees = query.data?.openFees ?? 0
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [telefone, setTelefone] = useState("")
+  const [instagram, setInstagram] = useState("")
+  const [outraRede, setOutraRede] = useState("")
+  const [nascimento, setNascimento] = useState("")
+  const [observacao, setObservacao] = useState("")
+  const [precos, setPrecos] = useState<Record<string, string>>({})
+  const seed = useRef("")
+  const formRef = useRef<StudentForm>({ telefone, instagram, outraRede, nascimento, observacao, precos })
+  formRef.current = { telefone, instagram, outraRede, nascimento, observacao, precos }
 
   useEffect(() => {
-    let alive = true
-    setLoading(true)
-    reload()
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
+    seed.current = ""
   }, [id])
+
+  useEffect(() => {
+    const found = query.data?.person
+    if (!found || !query.data) return
+    const next = JSON.stringify(studentForm(found, query.data.matriculas))
+    const previous = seed.current
+    const current = JSON.stringify(formRef.current)
+    seed.current = next
+    if (previous && current !== previous) return
+    const form = studentForm(found, query.data.matriculas)
+    setTelefone(form.telefone)
+    setInstagram(form.instagram)
+    setOutraRede(form.outraRede)
+    setNascimento(form.nascimento)
+    setObservacao(form.observacao)
+    setPrecos(form.precos)
+  }, [query.data])
 
   async function saveContact(event: FormEvent) {
     event.preventDefault()
@@ -107,7 +126,7 @@ export function StudentPage() {
     if (contactError || noteError) setError(humanError(contactError ?? noteError))
     else {
       setNotice("Contato salvo.")
-      await reload()
+      await query.refresh()
     }
   }
 
@@ -128,7 +147,7 @@ export function StudentPage() {
     if (updateError) setError(humanError(updateError))
     else {
       setNotice("Mensalidade atualizada.")
-      await reload()
+      await query.refresh()
     }
   }
 
@@ -146,12 +165,12 @@ export function StudentPage() {
     if (updateError) setError(humanError(updateError))
     else {
       setNotice("Matrícula encerrada.")
-      await reload()
+      await query.refresh()
     }
   }
 
-  if (loading && !person) return <Page title="Aluno"><p className="muted">Carregando…</p></Page>
-  if (!person) return <Page title="Aluno"><ErrorNote>{error ?? "Aluno não encontrado."}</ErrorNote></Page>
+  if (query.pending && !person) return <Page title="Aluno"><CardSkeleton /></Page>
+  if (!person) return <Page title="Aluno"><ErrorNote>{error ?? query.error ?? "Aluno não encontrado."}</ErrorNote></Page>
 
   const firstName = person.nome.trim().split(/\s+/)[0] || person.nome
   const classes = [...matriculas].sort((a, b) => {
@@ -172,7 +191,7 @@ export function StudentPage() {
       }
     >
       <Link className="back" to="/escola/alunos">Alunos</Link>
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{error ?? query.error}</ErrorNote>
       {notice ? <p className="muted" role="status">{notice}</p> : null}
       <div className="student-layout">
         <section className="stack">

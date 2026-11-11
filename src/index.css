@@ -1318,6 +1318,31 @@ a.btn.danger {
   .student-layout { grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 0.9fr); }
 }
 
+.skeleton { display: grid; gap: 0.75rem; }
+.skeleton-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.85rem; align-items: center; }
+.skeleton-row > span, .skeleton-card { display: grid; gap: 0.45rem; }
+.bone {
+  display: block;
+  max-width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface) 50%, var(--surface-3) 75%);
+  background-size: 220% 100%;
+  animation: shimmer 1.15s ease-in-out infinite;
+}
+.agenda-skeleton {
+  display: grid;
+  grid-template-columns: 3.2rem repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+  min-height: 18rem;
+}
+.agenda-skeleton .bone { height: 100%; min-height: 16rem; border-radius: var(--r-lg); }
+.agenda-skeleton .bone:first-child { min-height: 16rem; }
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }

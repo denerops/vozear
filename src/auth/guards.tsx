@@ -7,14 +7,14 @@ export function RequireAuth() {
   const session = useSession()
   const location = useLocation()
   if (!session.configured) return <Setup />
-  if (session.loading) return <p className="muted page-loading">Carregando…</p>
+  if (session.loading) return <p className="page-loading" role="status" aria-label="Carregando" />
   if (!session.userId) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   return <Outlet />
 }
 
 export function RequirePapel({ papel }: { papel: Papel }) {
   const session = useSession()
-  if (session.loading) return <p className="muted page-loading">Carregando…</p>
+  if (session.loading) return <p className="page-loading" role="status" aria-label="Carregando" />
   if (!session.papeis.includes(papel)) return <Navigate to="/" replace />
   return <Outlet />
 }
@@ -22,7 +22,7 @@ export function RequirePapel({ papel }: { papel: Papel }) {
 export function HomeRedirect() {
   const session = useSession()
   if (!session.configured) return <Setup />
-  if (session.loading) return <p className="muted page-loading">Carregando…</p>
+  if (session.loading) return <p className="page-loading" role="status" aria-label="Carregando" />
   if (!session.userId) return <Navigate to="/login" replace />
   if (session.papeis.includes("administrador")) return <Navigate to="/escola" replace />
   if (session.papeis.includes("professor")) return <Navigate to="/professor" replace />

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useBlocker } from "react-router-dom"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { ErrorNote, Page } from "../../components/ui.tsx"
+import { CardSkeleton, ErrorNote, Page } from "../../components/ui.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
+import { peek } from "../../data/memory.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { currentMonth, formatDate } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
@@ -18,54 +20,65 @@ type Form = { chave: string; nome: string; cidade: string; dia: number; mensagem
 const EMPTY: Form = { chave: "", nome: "VOZEAR", cidade: "SAO PAULO", dia: 10, mensagem: DEFAULT_TEMPLATE }
 const COMMON_DAYS = [5, 10, 15, 20, 25]
 
-export function SettingsPage() {
-  const [form, setForm] = useState<Form>(EMPTY)
-  const [saved, setSaved] = useState<Form>(EMPTY)
-  const [loading, setLoading] = useState(true)
-  const [instrumentos, setInstrumentos] = useState<Instrumento[]>([])
-  const [matriculas, setMatriculas] = useState<Matricula[]>([])
-  const [professores, setProfessores] = useState<Pessoa[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
-  const area = useRef<HTMLTextAreaElement>(null)
+type SettingsData = {
+  form: Form
+  instrumentos: Instrumento[]
+  matriculas: Matricula[]
+  professores: Pessoa[]
+}
 
-  async function reloadInstruments() {
-    const [items, enrollments, faculty] = await Promise.all([
-      loadInstrumentos(),
-      loadMatriculas(),
-      loadPessoas("professor"),
-    ])
-    setInstrumentos(items)
-    setMatriculas(enrollments)
-    setProfessores(faculty)
-  }
-
-  useEffect(() => {
-    let alive = true
-    Promise.all([loadConfiguracao(), reloadInstruments()])
-      .then(([school]) => {
-        if (!alive || !school) return
-        const loaded: Form = {
+async function loadSettings(): Promise<SettingsData> {
+  const [school, items, enrollments, faculty] = await Promise.all([
+    loadConfiguracao(),
+    loadInstrumentos(),
+    loadMatriculas(),
+    loadPessoas("professor"),
+  ])
+  return {
+    form: school
+      ? {
           chave: school.chave_pix,
           nome: school.nome_recebedor,
           cidade: school.cidade_recebedor,
           dia: school.vencimento_dia,
           mensagem: school.mensagem_whatsapp,
         }
-        setForm(loaded)
-        setSaved(loaded)
-      })
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
+      : EMPTY,
+    instrumentos: items,
+    matriculas: enrollments,
+    professores: faculty,
+  }
+}
+
+export function SettingsPage() {
+  const cached = peek<SettingsData>("escola:configuracao")
+  const query = useQuery("escola:configuracao", loadSettings)
+  const [form, setForm] = useState<Form>(cached?.form ?? EMPTY)
+  const [saved, setSaved] = useState<Form>(cached?.form ?? EMPTY)
+  const instrumentos = query.data?.instrumentos ?? cached?.instrumentos ?? []
+  const matriculas = query.data?.matriculas ?? cached?.matriculas ?? []
+  const professores = query.data?.professores ?? cached?.professores ?? []
+  const loading = query.pending && !query.data
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+  const area = useRef<HTMLTextAreaElement>(null)
+  const formRef = useRef(form)
+  const savedRef = useRef(saved)
+  formRef.current = form
+  savedRef.current = saved
+
+  useEffect(() => {
+    const loaded = query.data?.form
+    if (!loaded) return
+    if (JSON.stringify(formRef.current) !== JSON.stringify(savedRef.current)) return
+    setForm(loaded)
+    setSaved(loaded)
+  }, [query.data])
+
+  async function reloadInstruments() {
+    await query.refresh()
+  }
 
   const dirty = JSON.stringify(form) !== JSON.stringify(saved)
   const blocker = useBlocker(dirty)
@@ -171,9 +184,9 @@ export function SettingsPage() {
       title="Configurações"
       lede="Como a escola recebe, quando cobra e o que cada instrumento custa."
     >
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{error ?? query.error}</ErrorNote>
       {notice ? <p className="muted" role="status">{notice}</p> : null}
-      {loading ? null : (
+      {loading ? <CardSkeleton rows={2} /> : (
         <form className="stack settings" onSubmit={(event) => void save(event)}>
           <section className="card settings-card">
             <div className="settings-copy">

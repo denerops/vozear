@@ -1,14 +1,15 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
-import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Page } from "../../components/ui.tsx"
 import { loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, formatMinute } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney, formatPhone } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import { whatsAppUrl } from "../../lib/whatsapp.ts"
-import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
+import type { Pessoa } from "../../types.ts"
 import { InstrumentPicks, sameIds } from "./TeachersPage.tsx"
 
 function dayName(day: number) {
@@ -23,12 +24,44 @@ function durationLabel(minutes: number) {
   return `${minutes} min`
 }
 
+type TeacherForm = {
+  selected: string[]
+  telefone: string
+  instagram: string
+  outraRede: string
+  nascimento: string
+}
+
+function teacherForm(person: Pessoa): TeacherForm {
+  return {
+    selected: person.instrumentos,
+    telefone: person.telefone,
+    instagram: person.instagram,
+    outraRede: person.outraRede,
+    nascimento: person.nascimento ?? "",
+  }
+}
+
 export function TeacherPage() {
   const { id = "" } = useParams()
-  const [person, setPerson] = useState<Pessoa | null>(null)
-  const [instruments, setInstruments] = useState<Instrumento[]>([])
-  const [matriculas, setMatriculas] = useState<Matricula[]>([])
-  const [students, setStudents] = useState<Map<string, string>>(new Map())
+  const query = useQuery(id ? `escola:professor:${id}` : null, async () => {
+    const [teachers, instrumentList, enrollments, alunos] = await Promise.all([
+      loadPessoas("professor"),
+      loadInstrumentos(),
+      loadMatriculas({ professorId: id }),
+      loadPessoas("aluno"),
+    ])
+    return {
+      person: teachers.find((item) => item.id === id) ?? null,
+      instruments: instrumentList,
+      matriculas: enrollments,
+      students: new Map(alunos.map((item) => [item.id, item.nome])),
+    }
+  })
+  const person = query.data?.person ?? null
+  const instruments = query.data?.instruments ?? []
+  const matriculas = query.data?.matriculas ?? []
+  const students = query.data?.students ?? new Map<string, string>()
   const [selected, setSelected] = useState<string[]>([])
   const [telefone, setTelefone] = useState("")
   const [instagram, setInstagram] = useState("")
@@ -37,43 +70,29 @@ export function TeacherPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  async function reload() {
-    const [teachers, instrumentList, enrollments, alunos] = await Promise.all([
-      loadPessoas("professor"),
-      loadInstrumentos(),
-      loadMatriculas({ professorId: id }),
-      loadPessoas("aluno"),
-    ])
-    const found = teachers.find((item) => item.id === id) ?? null
-    setPerson(found)
-    setInstruments(instrumentList)
-    setMatriculas(enrollments)
-    setStudents(new Map(alunos.map((item) => [item.id, item.nome])))
-    if (found) {
-      setSelected(found.instrumentos)
-      setTelefone(found.telefone)
-      setInstagram(found.instagram)
-      setOutraRede(found.outraRede)
-      setNascimento(found.nascimento ?? "")
-    }
-  }
+  const seed = useRef("")
+  const formRef = useRef<TeacherForm>({ selected, telefone, instagram, outraRede, nascimento })
+  formRef.current = { selected, telefone, instagram, outraRede, nascimento }
 
   useEffect(() => {
-    let alive = true
-    setLoading(true)
-    reload()
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
+    seed.current = ""
   }, [id])
+
+  useEffect(() => {
+    const found = query.data?.person
+    if (!found) return
+    const next = JSON.stringify(teacherForm(found))
+    const previous = seed.current
+    const current = JSON.stringify(formRef.current)
+    seed.current = next
+    if (previous && current !== previous) return
+    const form = teacherForm(found)
+    setSelected(form.selected)
+    setTelefone(form.telefone)
+    setInstagram(form.instagram)
+    setOutraRede(form.outraRede)
+    setNascimento(form.nascimento)
+  }, [query.data])
 
   async function saveInstruments() {
     if (!person) return
@@ -119,7 +138,7 @@ export function TeacherPage() {
     }
     setBusy(false)
     setNotice("Instrumentos salvos.")
-    await reload()
+    await query.refresh()
   }
 
   async function saveContact(event: FormEvent) {
@@ -138,12 +157,12 @@ export function TeacherPage() {
     if (contactError) setError(humanError(contactError))
     else {
       setNotice("Contato salvo.")
-      await reload()
+      await query.refresh()
     }
   }
 
-  if (loading && !person) return <Page title="Professor"><p className="muted">Carregando…</p></Page>
-  if (!person) return <Page title="Professor"><ErrorNote>{error ?? "Professor não encontrado."}</ErrorNote></Page>
+  if (query.pending && !person) return <Page title="Professor"><CardSkeleton /></Page>
+  if (!person) return <Page title="Professor"><ErrorNote>{error ?? query.error ?? "Professor não encontrado."}</ErrorNote></Page>
 
   const names = new Map(instruments.map((item) => [item.id, item.nome]))
   const firstName = person.nome.trim().split(/\s+/)[0] || person.nome
@@ -173,7 +192,7 @@ export function TeacherPage() {
       }
     >
       <Link className="back" to="/escola/professores">Professores</Link>
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{error ?? query.error}</ErrorNote>
       {notice ? <p className="muted" role="status">{notice}</p> : null}
       <div className="student-layout">
         <section className="stack">

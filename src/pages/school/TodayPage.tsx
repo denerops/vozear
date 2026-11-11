@@ -1,23 +1,22 @@
-import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
+import { Empty, ErrorNote, ListSkeleton, Page, StatsSkeleton, StatusBadge } from "../../components/ui.tsx"
 import { loadAulas, loadInstrumentos, loadMensalidades, nomesPorId } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { addDays, formatWhen, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
-import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
 import type { Aula, Mensalidade } from "../../types.ts"
 
+type TodayData = {
+  aulas: Aula[]
+  abertas: Mensalidade[]
+  nomes: Map<string, string>
+  instrumentos: Map<string, string>
+}
+
 export function TodayPage() {
   const today = saoPauloDate()
-  const [aulas, setAulas] = useState<Aula[]>([])
-  const [abertas, setAbertas] = useState<Mensalidade[]>([])
-  const [nomes, setNomes] = useState<Map<string, string>>(new Map())
-  const [instrumentos, setInstrumentos] = useState<Map<string, string>>(new Map())
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    Promise.all([
+  const query = useQuery(`escola:hoje:${today}`, async (): Promise<TodayData> => {
+    const [lessons, charges, instruments] = await Promise.all([
       loadAulas({
         from: saoPauloTimestamp(today, "00:00"),
         until: saoPauloTimestamp(addDays(today, 1), "00:00"),
@@ -25,31 +24,36 @@ export function TodayPage() {
       loadMensalidades(),
       loadInstrumentos(),
     ])
-      .then(async ([lessons, charges, instruments]) => {
-        const open = charges.filter((item) => item.situacao === "aberta")
-        const names = await nomesPorId([
-          ...lessons.flatMap((lesson) => [lesson.aluno_id, lesson.professor_id]),
-          ...open.map((item) => item.aluno_id),
-        ])
-        if (!alive) return
-        setAulas(lessons)
-        setAbertas(open)
-        setNomes(names)
-        setInstrumentos(new Map(instruments.map((item) => [item.id, item.nome])))
-      })
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-    return () => {
-      alive = false
+    const open = charges.filter((item) => item.situacao === "aberta")
+    const names = await nomesPorId([
+      ...lessons.flatMap((lesson) => [lesson.aluno_id, lesson.professor_id]),
+      ...open.map((item) => item.aluno_id),
+    ])
+    return {
+      aulas: lessons,
+      abertas: open,
+      nomes: names,
+      instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
     }
-  }, [today])
+  })
+  const aulas = query.data?.aulas ?? []
+  const abertas = query.data?.abertas ?? []
+  const nomes = query.data?.nomes ?? new Map<string, string>()
+  const instrumentos = query.data?.instrumentos ?? new Map<string, string>()
+  const loading = query.pending && !query.data
 
   const atrasadas = abertas.filter((item) => item.vencimento < today)
 
   return (
     <Page title="Hoje" lede="Aulas do dia e mensalidades que ainda estão em aberto.">
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{query.error}</ErrorNote>
+      {loading ? (
+        <>
+          <StatsSkeleton />
+          <ListSkeleton rows={3} />
+        </>
+      ) : (
+        <>
       <div className="stats">
         <article>
           <strong>{aulas.length}</strong>
@@ -86,6 +90,8 @@ export function TodayPage() {
           <Link to="/escola/mensalidades">Cobrar as mensalidades vencidas</Link>
         </p>
       ) : null}
+        </>
+      )}
     </Page>
   )
 }

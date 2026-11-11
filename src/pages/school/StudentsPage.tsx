@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
-import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
+import { Empty, ErrorNote, ListSkeleton, Page } from "../../components/ui.tsx"
 import { loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, formatMinute } from "../../lib/dates.ts"
-import { humanError } from "../../lib/errors.ts"
 import { accessRedirect, formatPhone } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import type { Matricula, Pessoa } from "../../types.ts"
@@ -20,52 +20,48 @@ function dayName(day: number) {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : ""
 }
 
+type StudentsData = {
+  people: Pessoa[]
+  matriculas: Matricula[]
+  instruments: Map<string, string>
+  teachers: Map<string, string>
+  openFees: Map<string, number>
+}
+
+async function loadStudents(): Promise<StudentsData> {
+  const [students, enrollments, instrumentList, teacherList, charges] = await Promise.all([
+    loadPessoas("aluno"),
+    loadMatriculas(),
+    loadInstrumentos(),
+    loadPessoas("professor"),
+    loadMensalidades(),
+  ])
+  const fees = new Map<string, number>()
+  for (const charge of charges) {
+    if (charge.situacao !== "aberta") continue
+    fees.set(charge.aluno_id, (fees.get(charge.aluno_id) ?? 0) + 1)
+  }
+  return {
+    people: students,
+    matriculas: enrollments,
+    instruments: new Map(instrumentList.map((item) => [item.id, item.nome])),
+    teachers: new Map(teacherList.map((item) => [item.id, item.nome])),
+    openFees: fees,
+  }
+}
+
 export function StudentsPage() {
-  const [people, setPeople] = useState<Pessoa[]>([])
-  const [matriculas, setMatriculas] = useState<Matricula[]>([])
-  const [instruments, setInstruments] = useState<Map<string, string>>(new Map())
-  const [teachers, setTeachers] = useState<Map<string, string>>(new Map())
-  const [openFees, setOpenFees] = useState<Map<string, number>>(new Map())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const list = useQuery("escola:alunos", loadStudents)
+  const people = list.data?.people ?? []
+  const matriculas = list.data?.matriculas ?? []
+  const instruments = list.data?.instruments ?? new Map<string, string>()
+  const teachers = list.data?.teachers ?? new Map<string, string>()
+  const openFees = list.data?.openFees ?? new Map<string, number>()
+  const loading = list.pending && !list.data
   const [search, setSearch] = useState("")
   const [view, setView] = useState<View>("todos")
   const [instrumentId, setInstrumentId] = useState("")
   const [inviting, setInviting] = useState(false)
-
-  async function reload() {
-    const [students, enrollments, instrumentList, teacherList, charges] = await Promise.all([
-      loadPessoas("aluno"),
-      loadMatriculas(),
-      loadInstrumentos(),
-      loadPessoas("professor"),
-      loadMensalidades(),
-    ])
-    setPeople(students)
-    setMatriculas(enrollments)
-    setInstruments(new Map(instrumentList.map((item) => [item.id, item.nome])))
-    setTeachers(new Map(teacherList.map((item) => [item.id, item.nome])))
-    const fees = new Map<string, number>()
-    for (const charge of charges) {
-      if (charge.situacao !== "aberta") continue
-      fees.set(charge.aluno_id, (fees.get(charge.aluno_id) ?? 0) + 1)
-    }
-    setOpenFees(fees)
-  }
-
-  useEffect(() => {
-    let alive = true
-    reload()
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
 
   const activeByStudent = useMemo(() => {
     const grouped = new Map<string, Matricula[]>()
@@ -116,7 +112,7 @@ export function StudentsPage() {
   })
 
   const lede = loading
-    ? "Carregando…"
+    ? "Buscando alunos…"
     : `${people.length} ${people.length === 1 ? "aluno" : "alunos"} · ${withClass} com aula`
 
   return (
@@ -129,7 +125,7 @@ export function StudentsPage() {
         </button>
       }
     >
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{list.error}</ErrorNote>
       <div className="roster-tools">
         <input
           className="roster-search"
@@ -181,7 +177,7 @@ export function StudentsPage() {
         ) : null}
       </div>
 
-      {loading ? null : people.length === 0 ? (
+      {loading ? <ListSkeleton /> : people.length === 0 ? (
         <Empty>Nenhum aluno ainda. O convite chega por e-mail e a pessoa cria a própria senha.</Empty>
       ) : visible.length === 0 ? (
         <Empty>Nenhum aluno encontrado.</Empty>
@@ -243,7 +239,7 @@ export function StudentsPage() {
           onClose={() => setInviting(false)}
           onCreated={async () => {
             setInviting(false)
-            await reload()
+            await list.refresh()
           }}
         />
       ) : null}

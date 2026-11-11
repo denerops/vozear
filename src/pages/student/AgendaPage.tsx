@@ -1,52 +1,43 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useSession } from "../../auth/session.tsx"
 import { WeekCalendar, WeekNav, hourMarks, type CellPaint } from "../../components/WeekCalendar.tsx"
 import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
 import { loadAulas, loadInstrumentos, nomesPorId } from "../../data/api.ts"
+import { useQuery } from "../../data/useQuery.ts"
 import { addDays, agendaStartMinute, dateOfWeekday, mondayOf, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
-import { humanError } from "../../lib/errors.ts"
 import { SITUACAO_AULA } from "../../lib/format.ts"
-import type { Aula, Instrumento } from "../../types.ts"
+import type { Instrumento } from "../../types.ts"
 
 export function StudentAgendaPage() {
   const session = useSession()
   const navigate = useNavigate()
   const [cursor, setCursor] = useState(saoPauloDate())
   const [anchorMinute, setAnchorMinute] = useState(agendaStartMinute)
-  const [aulas, setAulas] = useState<Aula[]>([])
-  const [instrumentos, setInstrumentos] = useState<Map<string, Instrumento>>(new Map())
-  const [nomes, setNomes] = useState<Map<string, string>>(new Map())
-  const [error, setError] = useState<string | null>(null)
-
   const monday = mondayOf(cursor)
-
-  useEffect(() => {
-    if (!session.userId) return
-    let alive = true
-    setError(null)
-    Promise.all([
-      loadAulas({
-        from: saoPauloTimestamp(monday, "00:00"),
-        until: saoPauloTimestamp(addDays(monday, 7), "00:00"),
-        alunoId: session.userId,
-      }),
-      loadInstrumentos(),
-    ])
-      .then(async ([lessons, instruments]) => {
-        const names = await nomesPorId(lessons.map((lesson) => lesson.professor_id))
-        if (!alive) return
-        setAulas(lessons)
-        setInstrumentos(new Map(instruments.map((item) => [item.id, item])))
-        setNomes(names)
-      })
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-    return () => {
-      alive = false
-    }
-  }, [session.userId, monday])
+  const query = useQuery(
+    session.userId ? `aluno:agenda:${session.userId}:${monday}` : null,
+    async () => {
+      const [lessons, instruments] = await Promise.all([
+        loadAulas({
+          from: saoPauloTimestamp(monday, "00:00"),
+          until: saoPauloTimestamp(addDays(monday, 7), "00:00"),
+          alunoId: session.userId ?? undefined,
+        }),
+        loadInstrumentos(),
+      ])
+      const names = await nomesPorId(lessons.map((lesson) => lesson.professor_id))
+      return {
+        aulas: lessons,
+        instrumentos: new Map(instruments.map((item) => [item.id, item])),
+        nomes: names,
+      }
+    },
+  )
+  const aulas = query.data?.aulas ?? []
+  const instrumentos = query.data?.instrumentos ?? new Map<string, Instrumento>()
+  const nomes = query.data?.nomes ?? new Map<string, string>()
+  const loading = query.pending && !query.data
 
   const paints: CellPaint[] = []
   for (const minute of hourMarks()) {
@@ -88,8 +79,15 @@ export function StudentAgendaPage() {
         />
       }
     >
-      <ErrorNote>{error}</ErrorNote>
-      {aulas.length === 0 ? <Empty>Nenhuma aula nesta semana.</Empty> : null}
+      <ErrorNote>{query.error}</ErrorNote>
+      {loading ? (
+        <div className="agenda-skeleton" aria-busy="true" aria-label="Carregando">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span key={index} className="bone" />
+          ))}
+        </div>
+      ) : null}
+      {loading || aulas.length > 0 ? null : <Empty>Nenhuma aula nesta semana.</Empty>}
       <WeekCalendar
         monday={monday}
         cells={paints}

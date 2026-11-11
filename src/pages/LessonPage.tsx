@@ -1,12 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
 import { useSession } from "../auth/session.tsx"
-import { ErrorNote, Page, StatusBadge } from "../components/ui.tsx"
+import { CardSkeleton, ErrorNote, Page, StatusBadge } from "../components/ui.tsx"
 import { loadAula, loadInstrumentos, loadRecados, nomesPorId } from "../data/api.ts"
+import { useQuery } from "../data/useQuery.ts"
 import { client } from "../lib/supabase.ts"
 import { formatWhen, saoPauloDate, saoPauloTimestamp } from "../lib/dates.ts"
 import { humanError } from "../lib/errors.ts"
-import type { Aula, Recado, RecadoLink, SituacaoAula } from "../types.ts"
+import type { RecadoLink, SituacaoAula } from "../types.ts"
 
 export function LessonPage() {
   const { id = "" } = useParams()
@@ -17,9 +18,20 @@ export function LessonPage() {
     : location.pathname.startsWith("/professor")
       ? "/professor"
       : "/escola/agenda"
-  const [aula, setAula] = useState<Aula | null>(null)
-  const [recados, setRecados] = useState<Recado[]>([])
-  const [titulo, setTitulo] = useState("")
+  const query = useQuery(id ? `aula:${id}` : null, async () => {
+    const [lesson, notes, instruments] = await Promise.all([loadAula(id), loadRecados(id), loadInstrumentos()])
+    const names = await nomesPorId(lesson ? [lesson.professor_id, lesson.aluno_id] : [])
+    return {
+      aula: lesson,
+      recados: notes,
+      titulo: lesson
+        ? `${instruments.find((item) => item.id === lesson.instrumento_id)?.nome ?? "Aula"} · ${names.get(lesson.aluno_id) ?? ""}`
+        : "Aula",
+    }
+  })
+  const aula = query.data?.aula ?? null
+  const recados = query.data?.recados ?? []
+  const titulo = query.data?.titulo ?? "Aula"
   const [texto, setTexto] = useState("")
   const [links, setLinks] = useState<RecadoLink[]>([{ rotulo: "", url: "" }])
   const [quando, setQuando] = useState(saoPauloDate())
@@ -33,35 +45,6 @@ export function LessonPage() {
         (session.papeis.includes("professor") && aula.professor_id === session.userId)),
   )
 
-  async function reload() {
-    const [lesson, notes, instruments] = await Promise.all([
-      loadAula(id),
-      loadRecados(id),
-      loadInstrumentos(),
-    ])
-    const names = await nomesPorId(lesson ? [lesson.professor_id, lesson.aluno_id] : [])
-    setAula(lesson)
-    setRecados(notes)
-    setTitulo(
-      lesson
-        ? `${instruments.find((item) => item.id === lesson.instrumento_id)?.nome ?? "Aula"} · ${names.get(lesson.aluno_id) ?? ""}`
-        : "Aula",
-    )
-  }
-
-  useEffect(() => {
-    let alive = true
-    reload()
-      .catch((reason: { message?: string }) => {
-        if (alive) setError(humanError(reason))
-      })
-    return () => {
-      alive = false
-    }
-    // reload identity changes every render; the id is the dependency that matters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
-
   async function run(action: () => PromiseLike<unknown>) {
     setPending(true)
     setError(null)
@@ -71,7 +54,7 @@ export function LessonPage() {
       setError(humanError(actionError))
       return
     }
-    await reload()
+    await query.refresh()
   }
 
   async function saveNote(event: FormEvent) {
@@ -94,18 +77,18 @@ export function LessonPage() {
     }
     setTexto("")
     setLinks([{ rotulo: "", url: "" }])
-    await reload()
+    await query.refresh()
   }
 
-  if (!aula && !error) return <Page title="Aula"><p className="muted">Carregando…</p></Page>
-  if (!aula) return <Page title="Aula"><ErrorNote>{error ?? "Aula não encontrada."}</ErrorNote></Page>
+  if (!aula && query.pending) return <Page title="Aula"><CardSkeleton /></Page>
+  if (!aula) return <Page title="Aula"><ErrorNote>{error ?? query.error ?? "Aula não encontrada."}</ErrorNote></Page>
 
   return (
     <Page title={titulo} lede={formatWhen(aula.inicio)} action={<StatusBadge value={aula.situacao} />}>
       <p>
         <Link to={back}>Voltar</Link>
       </p>
-      <ErrorNote>{error}</ErrorNote>
+      <ErrorNote>{error ?? query.error}</ErrorNote>
       {canEdit ? (
         <section className="card stack">
           <h2>Esta aula</h2>

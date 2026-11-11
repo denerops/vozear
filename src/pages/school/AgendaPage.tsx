@@ -19,21 +19,33 @@ import { toExceptions, toSeries, type AgendaTeacher } from "../../agenda/records
 import type { AgendaClass, AgendaDraft } from "../../agenda/types.ts"
 import { ErrorNote } from "../../components/ui.tsx"
 import { loadAulas, loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
+import { peek, remember } from "../../data/memory.ts"
 import { addDays, mondayOf, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import type { Aula, Instrumento, Matricula, Pessoa } from "../../types.ts"
+
+type AgendaSnapshot = {
+  matriculas: Matricula[]
+  aulas: Aula[]
+  people: Pessoa[]
+  instrumentos: Instrumento[]
+  students: StudentOption[]
+  teachers: AgendaTeacher[]
+}
 
 export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   const session = useSession()
   const today = saoPauloDate()
   const professorId = mode === "professor" ? session.userId : null
-  const [matriculas, setMatriculas] = useState<Matricula[]>([])
-  const [aulas, setAulas] = useState<Aula[]>([])
-  const [people, setPeople] = useState<Pessoa[]>([])
-  const [instrumentos, setInstrumentos] = useState<Instrumento[]>([])
-  const [students, setStudents] = useState<StudentOption[]>([])
-  const [teachers, setTeachers] = useState<AgendaTeacher[]>([])
-  const [studentsStatus, setStudentsStatus] = useState<"loading" | "ready" | "error">("loading")
+  const cacheKey = mode === "professor" && !professorId ? null : `agenda:${mode}:${professorId ?? "escola"}`
+  const cachedNow = cacheKey ? peek<AgendaSnapshot>(cacheKey) : undefined
+  const [matriculas, setMatriculas] = useState<Matricula[]>(cachedNow?.matriculas ?? [])
+  const [aulas, setAulas] = useState<Aula[]>(cachedNow?.aulas ?? [])
+  const [people, setPeople] = useState<Pessoa[]>(cachedNow?.people ?? [])
+  const [instrumentos, setInstrumentos] = useState<Instrumento[]>(cachedNow?.instrumentos ?? [])
+  const [students, setStudents] = useState<StudentOption[]>(cachedNow?.students ?? [])
+  const [teachers, setTeachers] = useState<AgendaTeacher[]>(cachedNow?.teachers ?? [])
+  const [studentsStatus, setStudentsStatus] = useState<"loading" | "ready" | "error">(cachedNow ? "ready" : "loading")
   const [cursor, setCursor] = useState(today)
   const [selectedDate, setSelectedDate] = useState(today)
   const [teacher, setTeacher] = useState<string | null>(null)
@@ -42,10 +54,23 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
 
+  function show(snapshot: AgendaSnapshot) {
+    setMatriculas(snapshot.matriculas)
+    setAulas(snapshot.aulas)
+    setPeople(snapshot.people)
+    setInstrumentos(snapshot.instrumentos)
+    setStudents(snapshot.students)
+    setTeachers(snapshot.teachers)
+    setStudentsStatus("ready")
+  }
+
   useEffect(() => {
-    if (mode === "professor" && !professorId) return
+    if (!cacheKey) return
+    const key = cacheKey
     let alive = true
-    setStudentsStatus("loading")
+    const cached = peek<AgendaSnapshot>(key)
+    if (cached) show(cached)
+    else setStudentsStatus("loading")
     async function load() {
       const until = lessonHorizon()
       const [enrollments, pupils, faculty, instruments] = await Promise.all([
@@ -61,36 +86,41 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
         until: saoPauloTimestamp(addDays(until, 1), "00:00"),
         ...(professorId ? { professorId } : {}),
       })
-      if (!alive) return
       const names = new Map(instruments.map((item) => [item.id, item.nome]))
       const visibleFaculty = professorId ? faculty.filter((item) => item.id === professorId) : faculty
-      setMatriculas(enrollments)
-      setAulas(lessons)
-      setPeople([...pupils, ...faculty])
-      setInstrumentos(instruments)
-      setStudents(pupils.map((person) => ({
-        id: person.id,
-        nome: person.nome,
-        email: person.email,
-        telefone: person.telefone,
-      })))
-      setTeachers(visibleFaculty.map((person) => ({
-        id: person.id,
-        name: person.nome,
-        instruments: person.instrumentos.map((id) => names.get(id) ?? "").filter(Boolean),
-      })))
-      setStudentsStatus("ready")
+      const snapshot: AgendaSnapshot = {
+        matriculas: enrollments,
+        aulas: lessons,
+        people: [...pupils, ...faculty],
+        instrumentos: instruments,
+        students: pupils.map((person) => ({
+          id: person.id,
+          nome: person.nome,
+          email: person.email,
+          telefone: person.telefone,
+        })),
+        teachers: visibleFaculty.map((person) => ({
+          id: person.id,
+          name: person.nome,
+          instruments: person.instrumentos.map((item) => names.get(item) ?? "").filter(Boolean),
+        })),
+      }
+      remember(key, snapshot)
+      return snapshot
     }
     load()
+      .then((snapshot) => {
+        if (alive) show(snapshot)
+      })
       .catch((reason: { message?: string }) => {
         if (!alive) return
         setError(humanError(reason))
-        setStudentsStatus("error")
+        if (!cached) setStudentsStatus("error")
       })
     return () => {
       alive = false
     }
-  }, [mode, professorId, version])
+  }, [cacheKey, professorId, version])
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
   const instrumentNames = useMemo(
@@ -248,6 +278,13 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   return (
     <div data-mode={mode}>
       <ErrorNote>{error}</ErrorNote>
+      {studentsStatus === "loading" && teachers.length === 0 ? (
+        <div className="agenda-skeleton" aria-busy="true" aria-label="Carregando">
+          {Array.from({ length: 6 }, (_, index) => (
+            <span key={index} className="bone" />
+          ))}
+        </div>
+      ) : null}
       <WeeklyCalendar
         monday={monday}
         selectedDate={selectedDate}
