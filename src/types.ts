@@ -24,6 +24,7 @@ export type Pessoa = {
   outraRede: string
   nascimento: string | null
   observacao: string
+  criadoEm: string
   instrumentos: string[]
   papeis: Papel[]
 }

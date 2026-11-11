@@ -17,8 +17,8 @@ const matricula: Matricula = {
 }
 
 const people = new Map<string, Pessoa>([
-  ["aluno", { id: "aluno", nome: "Caio Teste", email: "", telefone: "", instagram: "", outraRede: "", nascimento: null, observacao: "", instrumentos: [], papeis: ["aluno"] }],
-  ["prof", { id: "prof", nome: "Brenda", email: "", telefone: "", instagram: "", outraRede: "", nascimento: null, observacao: "", instrumentos: [], papeis: ["professor"] }],
+  ["aluno", { id: "aluno", nome: "Caio Teste", email: "", telefone: "", instagram: "", outraRede: "", nascimento: null, observacao: "", criadoEm: "", instrumentos: [], papeis: ["aluno"] }],
+  ["prof", { id: "prof", nome: "Brenda", email: "", telefone: "", instagram: "", outraRede: "", nascimento: null, observacao: "", criadoEm: "", instrumentos: [], papeis: ["professor"] }],
 ])
 
 function lesson(patch: Partial<Aula>): Aula {

@@ -1,5 +1,6 @@
-import type { ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import type { SituacaoAula, SituacaoMensalidade } from "../types.ts"
+import { Glyph } from "./glyphs.tsx"
 import { SITUACAO_AULA, SITUACAO_MENSALIDADE } from "../lib/format.ts"
 
 export function Page({
@@ -7,23 +8,71 @@ export function Page({
   lede,
   children,
   action,
+  kicker,
+  bare = false,
 }: {
   title: string
   lede?: string
   children: ReactNode
   action?: ReactNode
+  kicker?: string
+  bare?: boolean
 }) {
   return (
-    <main className="page">
-      <header className="page-head">
-        <div>
-          <h1>{title}</h1>
-          {lede ? <p className="lede">{lede}</p> : null}
-        </div>
-        {action}
-      </header>
+    <main className="page" aria-label={bare ? title : undefined}>
+      {bare ? null : (
+        <header className="page-head">
+          <div>
+            {kicker ? <p className="eyebrow">{kicker}</p> : null}
+            <h1>{title}</h1>
+            {lede ? <p className="lede">{lede}</p> : null}
+          </div>
+          {action}
+        </header>
+      )}
       {children}
     </main>
+  )
+}
+
+export function Menu({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: PointerEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointer)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("pointerdown", onPointer)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open])
+
+  return (
+    <div className="menu" ref={ref}>
+      <button
+        className="icon-btn"
+        type="button"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Glyph name="dots" />
+      </button>
+      {open ? (
+        <div className="menu-pop" role="menu" onClick={() => setOpen(false)}>
+          {children}
+        </div>
+      ) : null}
+    </div>
   )
 }
 

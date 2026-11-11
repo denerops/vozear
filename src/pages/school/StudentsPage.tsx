@@ -1,23 +1,70 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
-import { toneFor } from "../../agenda/model.ts"
-import { Empty, ErrorNote, ListSkeleton, Page } from "../../components/ui.tsx"
+import { Glyph, instrumentGlyph } from "../../components/glyphs.tsx"
+import { Empty, ErrorNote, ListSkeleton, Menu, Page } from "../../components/ui.tsx"
 import { loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
-import { DIAS, formatMinute } from "../../lib/dates.ts"
+import { DIAS, TIMEZONE, formatMinute, saoPauloDate, timeToMinute } from "../../lib/dates.ts"
 import { accessRedirect, formatPhone } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
+import { whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Matricula, Pessoa } from "../../types.ts"
 
 type View = "todos" | "aula" | "livre"
+type Layout = "tabela" | "cartoes"
+type SortKey = "nome" | "instrumento" | "proxima" | "status"
+
+const SHORT_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+const WASH = [
+  { background: "#efe7fb", color: "#6d4ea3" },
+  { background: "#fde7ee", color: "#a33b5c" },
+  { background: "#f8eadf", color: "#a15a32" },
+  { background: "#f3eee6", color: "#6d5b48" },
+  { background: "#e7f3ee", color: "#1f7a52" },
+  { background: "#e7eefb", color: "#2c5d9b" },
+]
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
 }
 
-function dayName(day: number) {
-  const name = DIAS[day] ?? ""
-  return name ? name.charAt(0).toUpperCase() + name.slice(1) : ""
+function weekIndex(day: number) {
+  return day === 0 ? 7 : day
+}
+
+function saoPauloNow(date = new Date()) {
+  const iso = saoPauloDate(date)
+  const [year, month, day] = iso.split("-").map(Number)
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date)
+  return { weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay(), minute: timeToMinute(time) }
+}
+
+function stillThisWeek(day: number, minute: number, nowDay: number, nowMinute: number) {
+  const left = weekIndex(day)
+  const now = weekIndex(nowDay)
+  if (left > now) return true
+  return left === now && minute > nowMinute
+}
+
+function waitMinutes(day: number, minute: number, nowDay: number, nowMinute: number) {
+  let delta = weekIndex(day) - weekIndex(nowDay)
+  if (delta < 0 || (delta === 0 && minute <= nowMinute)) delta += 7
+  return delta * 24 * 60 + (minute - nowMinute)
+}
+
+function washFor(name: string) {
+  let index = 0
+  for (const char of name) index = (index + char.charCodeAt(0)) % WASH.length
+  return WASH[index] ?? WASH[0]
+}
+
+function initial(name: string) {
+  return name.trim().charAt(0).toUpperCase() || "?"
 }
 
 type StudentsData = {
@@ -50,6 +97,12 @@ async function loadStudents(): Promise<StudentsData> {
   }
 }
 
+function statusOf(classes: number, fees: number) {
+  if (fees > 0) return { label: fees === 1 ? "1 em aberto" : `${fees} em aberto`, tone: "aberta", rank: 1 }
+  if (classes > 0) return { label: "Em aula", tone: "em-aula", rank: 0 }
+  return { label: "Sem aula", tone: "sem-aula", rank: 2 }
+}
+
 export function StudentsPage() {
   const list = useQuery("escola:alunos", loadStudents)
   const people = list.data?.people ?? []
@@ -60,179 +113,207 @@ export function StudentsPage() {
   const loading = list.pending && !list.data
   const [search, setSearch] = useState("")
   const [view, setView] = useState<View>("todos")
-  const [instrumentId, setInstrumentId] = useState("")
+  const [layout, setLayout] = useState<Layout>("tabela")
+  const [sort, setSort] = useState<SortKey>("nome")
+  const [ascending, setAscending] = useState(true)
   const [inviting, setInviting] = useState(false)
+  const now = saoPauloNow()
 
   const activeByStudent = useMemo(() => {
     const grouped = new Map<string, Matricula[]>()
     for (const item of matriculas) {
       if (item.situacao !== "ativa") continue
-      const list = grouped.get(item.aluno_id) ?? []
-      list.push(item)
-      grouped.set(item.aluno_id, list)
-    }
-    for (const list of grouped.values()) {
-      list.sort((a, b) => a.dia_semana - b.dia_semana || a.inicio_minuto - b.inicio_minuto)
+      const rows = grouped.get(item.aluno_id) ?? []
+      rows.push(item)
+      grouped.set(item.aluno_id, rows)
     }
     return grouped
   }, [matriculas])
 
-  const instrumentOptions = useMemo(() => {
-    const ids = new Set<string>()
-    for (const list of activeByStudent.values()) {
-      for (const item of list) ids.add(item.instrumento_id)
-    }
-    return [...ids]
-      .map((id) => ({ id, nome: instruments.get(id) ?? "Instrumento" }))
-      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-  }, [activeByStudent, instruments])
-
   const withClass = people.filter((person) => (activeByStudent.get(person.id)?.length ?? 0) > 0).length
+  const withoutClass = people.length - withClass
+  const openLessons = [...activeByStudent.values()]
+    .flat()
+    .filter((item) => stillThisWeek(item.dia_semana, item.inicio_minuto, now.weekday, now.minute)).length
+
   const query = fold(search.trim())
   const digits = search.replace(/\D/g, "")
-  const visible = people.filter((person) => {
-    const classes = activeByStudent.get(person.id) ?? []
-    if (view === "aula" && classes.length === 0) return false
-    if (view === "livre" && classes.length > 0) return false
-    if (instrumentId && !classes.some((item) => item.instrumento_id === instrumentId)) return false
-    if (!query) return true
-    const haystack = fold(
-      [
-        person.nome,
-        person.email,
-        person.telefone,
-        ...classes.flatMap((item) => [
-          teachers.get(item.professor_id) ?? "",
-          instruments.get(item.instrumento_id) ?? "",
-        ]),
-      ].join(" "),
-    )
-    if (haystack.includes(query)) return true
-    return digits.length > 0 && person.telefone.replace(/\D/g, "").includes(digits)
-  })
+  const rows = people
+    .map((person) => {
+      const classes = activeByStudent.get(person.id) ?? []
+      const names = [...new Set(classes.map((item) => instruments.get(item.instrumento_id) ?? "Aula"))]
+      let next: Matricula | null = null
+      let wait = Number.POSITIVE_INFINITY
+      for (const item of classes) {
+        const ahead = waitMinutes(item.dia_semana, item.inicio_minuto, now.weekday, now.minute)
+        if (ahead < wait) {
+          next = item
+          wait = ahead
+        }
+      }
+      const fees = openFees.get(person.id) ?? 0
+      return { person, classes, names, next, wait, fees, status: statusOf(classes.length, fees) }
+    })
+    .filter((row) => {
+      if (view === "aula" && row.classes.length === 0) return false
+      if (view === "livre" && row.classes.length > 0) return false
+      if (!query) return true
+      const haystack = fold(
+        [
+          row.person.nome,
+          row.person.email,
+          row.person.telefone,
+          ...row.classes.flatMap((item) => [
+            teachers.get(item.professor_id) ?? "",
+            instruments.get(item.instrumento_id) ?? "",
+          ]),
+        ].join(" "),
+      )
+      if (haystack.includes(query)) return true
+      return digits.length > 0 && row.person.telefone.replace(/\D/g, "").includes(digits)
+    })
+    .sort((a, b) => {
+      const direction = ascending ? 1 : -1
+      if (sort === "instrumento") return a.names.join(" ").localeCompare(b.names.join(" "), "pt-BR") * direction
+      if (sort === "proxima") return (a.wait - b.wait) * direction
+      if (sort === "status") return (a.status.rank - b.status.rank) * direction || a.person.nome.localeCompare(b.person.nome, "pt-BR")
+      return a.person.nome.localeCompare(b.person.nome, "pt-BR") * direction
+    })
 
-  const lede = loading
-    ? "Buscando alunos…"
-    : `${people.length} ${people.length === 1 ? "aluno" : "alunos"} · ${withClass} com aula`
+  function toggleSort(key: SortKey) {
+    if (sort === key) setAscending((value) => !value)
+    else {
+      setSort(key)
+      setAscending(true)
+    }
+  }
 
   return (
     <Page
+      kicker="Alunos"
       title="Alunos"
-      lede={lede}
+      lede="Gerencie seus alunos, turmas e aulas em um só lugar."
       action={
         <button className="btn" type="button" onClick={() => setInviting(true)}>
-          Convidar
+          <Glyph name="plus" size={16} />
+          Convidar aluno
         </button>
       }
     >
       <ErrorNote>{list.error}</ErrorNote>
-      <div className="roster-tools">
-        <input
-          className="roster-search"
-          type="search"
-          value={search}
-          placeholder="Buscar nome, telefone ou instrumento"
-          aria-label="Buscar aluno"
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <div className="roster-filters" role="group" aria-label="Situação">
-          <button type="button" aria-pressed={view === "todos"} onClick={() => setView("todos")}>
-            Todos
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === "aula"}
-            onClick={() => setView("aula")}
-          >
-            Com aula
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === "livre"}
-            onClick={() => {
-              setView("livre")
-              setInstrumentId("")
-            }}
-          >
-            Sem aula
-          </button>
+      {loading ? (
+        <div className="kpis" aria-busy="true" aria-label="Carregando">
+          {Array.from({ length: 4 }, (_, index) => (
+            <article key={index} className="kpi skeleton-kpi" />
+          ))}
         </div>
-        {view !== "livre" && instrumentOptions.length > 0 ? (
-          <div className="roster-filters" role="group" aria-label="Instrumento">
-            {instrumentOptions.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={instrumentId === item.id}
-                onClick={() => {
-                  const next = instrumentId === item.id ? "" : item.id
-                  setInstrumentId(next)
-                  if (next) setView("aula")
-                }}
-              >
-                {item.nome}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      {loading ? <ListSkeleton /> : people.length === 0 ? (
-        <Empty>Nenhum aluno ainda. O convite chega por e-mail e a pessoa cria a própria senha.</Empty>
-      ) : visible.length === 0 ? (
-        <Empty>Nenhum aluno encontrado.</Empty>
       ) : (
-        <ul className="roster">
-          {visible.map((person) => {
-            const classes = activeByStudent.get(person.id) ?? []
-            const tone = toneFor(classes[0] ? instruments.get(classes[0].instrumento_id) ?? "" : "")
-            const fees = openFees.get(person.id) ?? 0
-            return (
-              <li key={person.id}>
-                <Link className="roster-card" to={`/escola/alunos/${person.id}`}>
-                  <span
-                    className="roster-avatar"
-                    style={
-                      classes.length > 0
-                        ? { background: tone.background, color: tone.bar }
-                        : undefined
-                    }
-                    aria-hidden="true"
-                  >
-                    {person.nome.trim().charAt(0).toUpperCase() || "?"}
-                  </span>
-                  <span className="roster-body">
-                    <strong>{person.nome}</strong>
-                    <span className="roster-meta">{formatPhone(person.telefone) || person.email}</span>
-                    {classes.length === 0 ? (
-                      <span className="roster-meta">Sem aula semanal</span>
-                    ) : (
-                      classes.map((item) => {
-                        const name = instruments.get(item.instrumento_id) ?? "Aula"
-                        const dot = toneFor(name)
-                        return (
-                          <span key={item.id} className="roster-class">
-                            <i style={{ background: dot.dot }} />
-                            <span>
-                              {name} · {teachers.get(item.professor_id) ?? "Professor"} · {dayName(item.dia_semana)}{" "}
-                              {formatMinute(item.inicio_minuto)}
-                            </span>
-                          </span>
-                        )
-                      })
-                    )}
-                  </span>
-                  {fees > 0 ? (
-                    <span className="badge" data-status="aberta">
-                      {fees === 1 ? "1 em aberto" : `${fees} em aberto`}
-                    </span>
-                  ) : null}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+        <div className="kpis">
+          <Kpi icon="people" tone="rose" value={people.length} label="Alunos ativos" />
+          <Kpi icon="cap" tone="lilac" value={withClass} label="Com aula esta semana" />
+          <Kpi icon="calendar" tone="sand" value={withoutClass} label="Sem aula" />
+          <Kpi icon="clock" tone="gold" value={openLessons} label={openLessons === 1 ? "Aula em aberto" : "Aulas em aberto"} />
+        </div>
       )}
+
+      <section className="directory">
+        <div className="directory-bar">
+          <div className="directory-filters" role="group" aria-label="Situação">
+            <button type="button" aria-pressed={view === "todos"} onClick={() => setView("todos")}>
+              Todos ({people.length})
+            </button>
+            <button type="button" aria-pressed={view === "aula"} onClick={() => setView("aula")}>
+              Com aula ({withClass})
+            </button>
+            <button type="button" aria-pressed={view === "livre"} onClick={() => setView("livre")}>
+              Sem aula ({withoutClass})
+            </button>
+          </div>
+          <input
+            className="roster-search"
+            type="search"
+            value={search}
+            placeholder="Buscar aluno, telefone ou instrumento..."
+            aria-label="Buscar aluno"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <div className="view-switch" role="group" aria-label="Visualização">
+            <button type="button" aria-pressed={layout === "tabela"} aria-label="Lista" onClick={() => setLayout("tabela")}>
+              <Glyph name="list" size={16} />
+            </button>
+            <button type="button" aria-pressed={layout === "cartoes"} aria-label="Cartões" onClick={() => setLayout("cartoes")}>
+              <Glyph name="grid" size={16} />
+            </button>
+          </div>
+        </div>
+
+        {loading ? <ListSkeleton /> : people.length === 0 ? (
+          <Empty>Nenhum aluno ainda. O convite chega por e-mail e a pessoa cria a própria senha.</Empty>
+        ) : rows.length === 0 ? (
+          <Empty>Nenhum aluno encontrado.</Empty>
+        ) : layout === "cartoes" ? (
+          <ul className="person-grid">
+            {rows.map((row) => (
+              <li key={row.person.id}>
+                <StudentTile
+                  person={row.person}
+                  names={row.names}
+                  next={row.next}
+                  teachers={teachers}
+                  instruments={instruments}
+                  status={row.status}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="table-scroll">
+            <table className="person-table">
+              <thead>
+                <tr>
+                  <SortHead label="Aluno" active={sort === "nome"} ascending={ascending} onClick={() => toggleSort("nome")} />
+                  <SortHead label="Instrumento(s)" active={sort === "instrumento"} ascending={ascending} onClick={() => toggleSort("instrumento")} />
+                  <SortHead label="Próxima aula" active={sort === "proxima"} ascending={ascending} onClick={() => toggleSort("proxima")} />
+                  <SortHead label="Status" active={sort === "status"} ascending={ascending} onClick={() => toggleSort("status")} />
+                  <th aria-label="Ações" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.person.id}>
+                    <td>
+                      <PersonLink person={row.person} />
+                    </td>
+                    <td>
+                      {row.names.length === 0 ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <span className="instrument-list">
+                          {row.names.map((name) => (
+                            <span key={name} className="instrument-chip">
+                              <Glyph name={instrumentGlyph(name)} size={15} />
+                              {name}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <NextLesson next={row.next} teachers={teachers} instruments={instruments} />
+                    </td>
+                    <td>
+                      <span className="badge" data-status={row.status.tone}>{row.status.label}</span>
+                    </td>
+                    <td className="person-actions">
+                      <RowActions person={row.person} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {inviting ? (
         <InviteDialog
@@ -244,6 +325,153 @@ export function StudentsPage() {
         />
       ) : null}
     </Page>
+  )
+}
+
+function Kpi({
+  icon,
+  tone,
+  value,
+  label,
+}: {
+  icon: "people" | "cap" | "calendar" | "clock"
+  tone: string
+  value: number
+  label: string
+}) {
+  return (
+    <article className="kpi">
+      <span className="kpi-icon" data-tone={tone}>
+        <Glyph name={icon} />
+      </span>
+      <span>
+        <strong>{value}</strong>
+        <span>{label}</span>
+      </span>
+    </article>
+  )
+}
+
+function SortHead({
+  label,
+  active,
+  ascending,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  ascending: boolean
+  onClick: () => void
+}) {
+  return (
+    <th aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={onClick}>
+        {label}
+      </button>
+    </th>
+  )
+}
+
+function PersonLink({ person }: { person: Pessoa }) {
+  const wash = washFor(person.nome)
+  return (
+    <Link className="person-id" to={`/escola/alunos/${person.id}`}>
+      <span className="person-avatar" style={{ background: wash.background, color: wash.color }} aria-hidden="true">
+        {initial(person.nome)}
+      </span>
+      <span>
+        <strong>{person.nome}</strong>
+        <small>{formatPhone(person.telefone) || person.email}</small>
+      </span>
+    </Link>
+  )
+}
+
+function NextLesson({
+  next,
+  teachers,
+  instruments,
+}: {
+  next: Matricula | null
+  teachers: Map<string, string>
+  instruments: Map<string, string>
+}) {
+  if (!next) {
+    return (
+      <span className="next-lesson">
+        <strong>Sem aula semanal</strong>
+      </span>
+    )
+  }
+  const day = SHORT_DAYS[next.dia_semana] ?? DIAS[next.dia_semana] ?? ""
+  return (
+    <span className="next-lesson">
+      <strong>
+        {day}, {formatMinute(next.inicio_minuto)}
+      </strong>
+      <small>
+        {instruments.get(next.instrumento_id) ?? "Aula"} · {teachers.get(next.professor_id) ?? "Professor"}
+      </small>
+    </span>
+  )
+}
+
+function RowActions({ person }: { person: Pessoa }) {
+  const first = person.nome.trim().split(/\s+/)[0] || person.nome
+  return (
+    <>
+      <Link className="icon-btn" to="/escola/agenda" aria-label={`Agenda de ${person.nome}`}>
+        <Glyph name="calendar" size={16} />
+      </Link>
+      <Menu label={`Ações de ${person.nome}`}>
+        <Link role="menuitem" to={`/escola/alunos/${person.id}`}>Abrir ficha</Link>
+        <Link role="menuitem" to="/escola/agenda">Abrir agenda</Link>
+        {person.telefone ? (
+          <a role="menuitem" href={whatsAppUrl(person.telefone, `Oi, ${first}.`)} target="_blank" rel="noreferrer">
+            WhatsApp
+          </a>
+        ) : null}
+      </Menu>
+    </>
+  )
+}
+
+function StudentTile({
+  person,
+  names,
+  next,
+  teachers,
+  instruments,
+  status,
+}: {
+  person: Pessoa
+  names: string[]
+  next: Matricula | null
+  teachers: Map<string, string>
+  instruments: Map<string, string>
+  status: { label: string; tone: string }
+}) {
+  return (
+    <article className="person-tile">
+      <PersonLink person={person} />
+      <span className="badge" data-status={status.tone}>{status.label}</span>
+      {names.length > 0 ? (
+        <span className="instrument-list">
+          {names.map((name) => (
+            <span key={name} className="instrument-chip">
+              <Glyph name={instrumentGlyph(name)} size={15} />
+              {name}
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className="muted">Sem instrumento</span>
+      )}
+      <NextLesson next={next} teachers={teachers} instruments={instruments} />
+      <div className="person-actions">
+        <RowActions person={person} />
+      </div>
+    </article>
   )
 }
 

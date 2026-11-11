@@ -58,8 +58,10 @@ export async function loadPessoas(papel?: Papel): Promise<Pessoa[]> {
   if (ids.length === 0) return []
 
   const [perfis, contatos, observacoes, vinculos] = await Promise.all([
-    rows<{ id: string; nome: string; email: string }>("perfis", "id, nome, email", (query) =>
-      query.in("id", ids),
+    rows<{ id: string; nome: string; email: string; criado_em: string }>(
+      "perfis",
+      "id, nome, email, criado_em",
+      (query) => query.in("id", ids),
     ),
     rows<ContatoRow>("contatos", "perfil_id, telefone, instagram, outra_rede, nascimento", (query) =>
       query.in("perfil_id", ids),
@@ -95,6 +97,7 @@ export async function loadPessoas(papel?: Papel): Promise<Pessoa[]> {
         outraRede: contact?.outra_rede ?? "",
         nascimento: contact?.nascimento ?? null,
         observacao: nota.get(perfil.id) ?? "",
+        criadoEm: perfil.criado_em,
         instrumentos: porPessoa.get(perfil.id) ?? [],
         papeis: papeis.filter((item) => item.user_id === perfil.id).map((item) => item.papel),
       }
