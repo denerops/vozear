@@ -1,4 +1,4 @@
-import { dateOfWeekday } from "../../lib/dates.ts"
+import { dateOfWeekday, saoPauloDate } from "../../lib/dates.ts"
 import { DAY_LABEL, ROW_HEIGHT, WEEKDAYS, classesOn, clockLabel, hourMarks, placedEvents, slotBounds } from "../model.ts"
 import type { AgendaClass } from "../types.ts"
 import { CalendarEvent } from "./CalendarEvent.tsx"
@@ -7,6 +7,7 @@ export function CalendarGrid({
   monday,
   selectedDate,
   classes,
+  teachers,
   onSelectDate,
   onOpen,
   onCreateAt,
@@ -14,10 +15,12 @@ export function CalendarGrid({
   monday: string
   selectedDate: string
   classes: AgendaClass[]
+  teachers: { name: string }[]
   onSelectDate: (date: string) => void
   onOpen: (id: string) => void
   onCreateAt: (date: string, startMinute: number) => void
 }) {
+  const today = saoPauloDate()
   const { start, end } = slotBounds()
   const marks = hourMarks(start, end)
   const height = marks.length * ROW_HEIGHT
@@ -29,11 +32,12 @@ export function CalendarGrid({
         {WEEKDAYS.map((day) => {
           const date = dateOfWeekday(monday, day)
           const selected = date === selectedDate
+          const isToday = date === today
           return (
             <button
               key={day}
               type="button"
-              className={`agenda-day${selected ? " is-selected" : ""}`}
+              className={`agenda-day${selected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
               aria-pressed={selected}
               onClick={() => onSelectDate(date)}
             >
@@ -78,6 +82,7 @@ export function CalendarGrid({
                   height={eventHeight}
                   column={column}
                   columns={columns}
+                  teachers={teachers}
                   onOpen={onOpen}
                 />
               )

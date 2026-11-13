@@ -1,4 +1,4 @@
-import { clockLabel, toneFor } from "../model.ts"
+import { clockLabel, teacherTone, type TeacherTone } from "../model.ts"
 import type { AgendaClass } from "../types.ts"
 
 export function CalendarEvent({
@@ -7,6 +7,7 @@ export function CalendarEvent({
   height,
   column,
   columns,
+  teachers,
   onOpen,
 }: {
   item: AgendaClass
@@ -14,9 +15,10 @@ export function CalendarEvent({
   height: number
   column: number
   columns: number
+  teachers: { name: string }[]
   onOpen: (id: string) => void
 }) {
-  const tone = toneFor(item.instrument)
+  const tone: TeacherTone = teacherTone(item.teacher, teachers)
   const width = `calc((100% - 8px) / ${columns})`
   const left = `calc(4px + (100% - 8px) * ${column} / ${columns})`
   return (
@@ -30,6 +32,7 @@ export function CalendarEvent({
         left,
         background: tone.background,
         borderLeftColor: tone.bar,
+        color: tone.bar,
       }}
       onClick={(event) => {
         event.stopPropagation()

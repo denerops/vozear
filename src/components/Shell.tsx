@@ -65,6 +65,9 @@ export function Shell() {
     ? { to: "/escola/configuracao", label: "Configurações", end: false, icon: "gear" }
     : null
 
+  const schoolAgenda = useMatch("/escola/agenda")
+  const teacherAgenda = useMatch({ path: "/professor", end: true })
+  const agenda = Boolean(schoolAgenda || teacherAgenda)
   const who = session.nome || session.email || ""
   const initials =
     who
@@ -76,7 +79,7 @@ export function Shell() {
   const roleLabel = admin ? "Administração" : professor ? "Professor" : "Aluno"
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className={agenda ? "h-svh overflow-hidden" : undefined}>
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>
@@ -122,12 +125,14 @@ export function Shell() {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-          <SidebarTrigger />
-          <span className="text-sm font-medium">Vozear</span>
-        </header>
-        <div className="flex flex-1 flex-col p-4 md:p-6">
+      <SidebarInset className={agenda ? "min-h-0" : undefined}>
+        {agenda ? null : (
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+            <SidebarTrigger />
+            <span className="text-sm font-medium">Vozear</span>
+          </header>
+        )}
+        <div className={agenda ? "flex min-h-0 flex-1 flex-col" : "flex flex-1 flex-col p-4 md:p-6"}>
           <Outlet />
         </div>
       </SidebarInset>

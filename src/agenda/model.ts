@@ -23,6 +23,25 @@ export function toneFor(instrument: string): InstrumentTone {
   return TONES[key] ?? { background: "#F1F2F4", bar: "#4A5160", dot: "#6A7280" }
 }
 
+export type TeacherTone = { background: string; bar: string; onDark: string }
+
+const TEACHER_TONES: TeacherTone[] = [
+  { background: "#E7ECFB", bar: "#3451C7", onDark: "#B7C4F7" },
+  { background: "#E3F5EF", bar: "#0E7A58", onDark: "#8ED9C0" },
+  { background: "#F8EFE0", bar: "#B86A12", onDark: "#F0C48A" },
+  { background: "#F3EAF8", bar: "#7A45A0", onDark: "#D4B4EE" },
+  { background: "#F8E8EB", bar: "#C4475A", onDark: "#F3A8B4" },
+  { background: "#E6F3F6", bar: "#1D6F86", onDark: "#9ED4E4" },
+]
+
+export function teacherTone(name: string, roster: { name: string }[]): TeacherTone {
+  const index = roster.findIndex((item) => item.name === name)
+  if (index >= 0) return TEACHER_TONES[index % TEACHER_TONES.length]
+  let hash = 0
+  for (const char of name) hash = (hash * 33 + char.charCodeAt(0)) >>> 0
+  return TEACHER_TONES[hash % TEACHER_TONES.length]
+}
+
 export function slotBounds() {
   return { start: SLOT_START, end: SLOT_END }
 }

@@ -276,21 +276,24 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   }
 
   return (
-    <div data-mode={mode}>
+    <div className="agenda-screen" data-mode={mode}>
       <ErrorNote>{error}</ErrorNote>
       <WeeklyCalendar
         monday={monday}
         selectedDate={selectedDate}
         classes={visible}
-        roster={series}
         teachers={teachers}
         teacher={teacher}
         onShift={shift}
+        onToday={() => {
+          setCursor(today)
+          setSelectedDate(today)
+          setDetailsId(null)
+        }}
         onSelectDate={setSelectedDate}
         onSelectTeacher={setTeacher}
         onOpen={setDetailsId}
         onCreateAt={(date, startMinute) => setEditing(blankDraft(date, startMinute))}
-        onCreate={() => setEditing(blankDraft(selectedDate, 8 * 60))}
         pending={studentsStatus === "loading" && teachers.length === 0}
       />
       {editing ? (
