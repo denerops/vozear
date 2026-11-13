@@ -16,6 +16,7 @@ import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
 import { InstrumentsPanel } from "./InstrumentsPanel.tsx"
 import { applyPalette, applyTheme, PALETTES, readPalette, readTheme, type PaletteId, type ThemeMode } from "../../theme/palettes.ts"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -192,62 +193,50 @@ export function SettingsPage() {
     >
       <ErrorNote>{error ?? query.error}</ErrorNote>
       {notice ? <p className="muted" role="status">{notice}</p> : null}
-      <section className="card settings-card is-plain">
-        <div className="settings-copy">
-          <h2>Aparência</h2>
-          <p className="muted">Claro ou escuro, e a paleta. Vale para o sistema neste navegador.</p>
-          <div className="theme-switch" role="radiogroup" aria-label="Tema">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={theme === "light"}
-              onClick={() => {
-                applyTheme("light")
-                setTheme("light")
-              }}
-            >
-              Claro
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={theme === "dark"}
-              onClick={() => {
-                applyTheme("dark")
-                setTheme("dark")
-              }}
-            >
-              Escuro
-            </button>
+      <Card>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-1">
+            <h2 className="font-heading text-base font-medium">Aparência</h2>
+            <p className="text-sm text-muted-foreground">Claro ou escuro, e a paleta. Vale para o sistema neste navegador.</p>
           </div>
-          <div className="palette-grid" role="radiogroup" aria-label="Paleta de cores">
+          <div className="flex w-fit gap-1 rounded-lg bg-muted p-1" role="radiogroup" aria-label="Tema">
+            <Button type="button" size="sm" role="radio" aria-checked={theme === "light"} variant={theme === "light" ? "secondary" : "ghost"} onClick={() => { applyTheme("light"); setTheme("light") }}>
+              Claro
+            </Button>
+            <Button type="button" size="sm" role="radio" aria-checked={theme === "dark"} variant={theme === "dark" ? "secondary" : "ghost"} onClick={() => { applyTheme("dark"); setTheme("dark") }}>
+              Escuro
+            </Button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Paleta de cores">
             {PALETTES.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 role="radio"
                 aria-checked={palette === item.id}
-                className={palette === item.id ? "palette-card is-selected" : "palette-card"}
+                className={`grid gap-1 rounded-xl bg-background p-3 text-left ring-1 ${palette === item.id ? "ring-primary" : "ring-foreground/10"}`}
                 onClick={() => {
                   applyPalette(item.id)
                   setPalette(item.id)
                 }}
               >
-                <span className="palette-swatch" style={{ background: item.soft }} aria-hidden="true">
-                  <i style={{ background: item.primary }} />
-                  <i style={{ background: item.accent }} />
-                  <i style={{ background: item.ink }} />
+                <span className="flex h-8 overflow-hidden rounded-md" aria-hidden="true">
+                  <i className="flex-1" style={{ background: item.soft }} />
+                  <i className="flex-1" style={{ background: item.primary }} />
+                  <i className="flex-1" style={{ background: item.accent }} />
+                  <i className="w-2" style={{ background: item.ink }} />
                 </span>
-                <strong>{item.name}</strong>
-                <span>{item.description}</span>
+                <strong className="text-sm font-medium">{item.name}</strong>
+                <span className="text-xs text-muted-foreground">{item.description}</span>
               </button>
             ))}
           </div>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
       {loading ? <CardSkeleton rows={2} /> : (
         <form className="stack settings" onSubmit={(event) => void save(event)}>
-          <section className="card settings-card">
+          <Card>
+            <CardContent className="grid gap-5 md:grid-cols-[minmax(0,1fr)_16rem] md:items-start">
             <div className="settings-copy">
               <h2>Recebimento por Pix</h2>
               <p className="muted">
@@ -304,15 +293,17 @@ export function SettingsPage() {
                 <p className="field-hint">Informe uma chave válida para ver a prévia.</p>
               )}
             </aside>
-          </section>
+            </CardContent>
+          </Card>
 
-          <section className="card stack">
+          <Card>
+            <CardContent className="grid gap-3">
             <h2>Vencimento</h2>
-            <div className="instrument-picks" role="group" aria-label="Dia de vencimento">
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Dia de vencimento">
               {COMMON_DAYS.map((day) => (
-                <button key={day} type="button" aria-pressed={form.dia === day} onClick={() => edit({ dia: day })}>
+                <Button key={day} type="button" size="sm" variant={form.dia === day ? "secondary" : "outline"} aria-pressed={form.dia === day} onClick={() => edit({ dia: day })}>
                   Dia {day}
-                </button>
+                </Button>
               ))}
             </div>
             <label className="settings-day">
@@ -330,9 +321,11 @@ export function SettingsPage() {
             <p className="field-hint">
               Vale para as mensalidades que ainda vão ser abertas. As que já existem mantêm a data.
             </p>
-          </section>
+            </CardContent>
+          </Card>
 
-          <section className="card settings-card">
+          <Card>
+            <CardContent className="grid gap-5 md:grid-cols-[minmax(0,1fr)_16rem] md:items-start">
             <div className="settings-copy">
               <div className="row spread">
                 <h2>Mensagem de cobrança</h2>
@@ -346,11 +339,11 @@ export function SettingsPage() {
                 </Button>
               </div>
               <p className="muted">O botão de WhatsApp abre o seu aplicativo com este texto. Nada é enviado sozinho.</p>
-              <div className="instrument-picks" role="group" aria-label="Inserir campo">
+              <div className="flex flex-wrap gap-1" role="group" aria-label="Inserir campo">
                 {TEMPLATE_FIELDS.map((field) => (
-                  <button key={field.key} type="button" onClick={() => insertField(field.key)}>
+                  <Button key={field.key} type="button" size="sm" variant="outline" onClick={() => insertField(field.key)}>
                     {field.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <label>
@@ -377,10 +370,11 @@ export function SettingsPage() {
               <p className="eyebrow">Como o aluno recebe</p>
               <div className="wa-bubble">{preview || "Mensagem vazia."}</div>
             </aside>
-          </section>
+            </CardContent>
+          </Card>
 
           {dirty ? (
-            <div className="save-bar" role="region" aria-label="Alterações">
+            <div className="sticky bottom-3 flex flex-wrap items-center justify-end gap-2 rounded-xl bg-card p-3 ring-1 ring-foreground/10" role="region" aria-label="Alterações">
               <span>Alterações não salvas</span>
               <Button variant="outline" type="button" onClick={() => setForm(saved)}>
                 Descartar

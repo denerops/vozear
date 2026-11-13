@@ -5,7 +5,9 @@ import { humanError } from "../../lib/errors.ts"
 import { formatMoneyInput, parseMoney } from "../../lib/format.ts"
 import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { ToneBadge } from "../../components/chrome.tsx"
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim()
@@ -150,8 +152,10 @@ export function InstrumentsPanel({
       {notice ? <p className="muted" role="status">{notice}</p> : null}
 
       {adding ? (
-        <form className="card stack" onSubmit={(event) => void add(event)}>
-          <h2>Novo instrumento</h2>
+        <Card>
+        <CardContent>
+        <form className="grid gap-3" onSubmit={(event) => void add(event)}>
+          <h2 className="font-heading text-base font-medium">Novo instrumento</h2>
           <div className="row">
             <label>
               Nome
@@ -186,9 +190,11 @@ export function InstrumentsPanel({
             </Button>
           </div>
         </form>
+        </CardContent>
+        </Card>
       ) : null}
 
-      <ul className="roster">
+      <ul className="grid gap-2">
         {ordered.map((item) => {
           const counts = usage.get(item.id) ?? { alunos: 0, professores: 0 }
           const typed = prices[item.id]
@@ -197,13 +203,10 @@ export function InstrumentsPanel({
           const dirty = typed !== undefined && cents !== item.valor_mensal_centavos
           const invalid = typed !== undefined && cents === null
           return (
-            <li key={item.id} className={`card enrollment settings-instrument${item.ativo ? "" : " is-off"}`}>
-              <span className="enrollment-bar" style={{ background: toneFor(item.nome).bar }} />
-              <div className="row spread">
+            <li key={item.id} className={`grid gap-2 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10 ${item.ativo ? "" : "opacity-60"}`} style={{ boxShadow: `inset 3px 0 0 ${toneFor(item.nome).bar}` }}>
+              <div className="flex items-center justify-between gap-3">
                 <strong>{item.nome}</strong>
-                <span className="badge" data-status={item.ativo ? "paga" : undefined}>
-                  {item.ativo ? "Ativo" : "Inativo"}
-                </span>
+                <ToneBadge tone={item.ativo ? "paga" : undefined}>{item.ativo ? "Ativo" : "Inativo"}</ToneBadge>
               </div>
               <p className="muted">
                 {plural(counts.alunos, "aluno ativo", "alunos ativos")} · {plural(counts.professores, "professor", "professores")}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { Glyph, instrumentGlyph, type GlyphName } from "../../components/glyphs.tsx"
-import { CardSkeleton, Empty, ErrorNote, Menu, Page } from "../../components/chrome.tsx"
+import { CardSkeleton, Empty, ErrorNote, Menu, Page, Panel, PersonMark, Record, Stat, StatGrid, ToneBadge } from "../../components/chrome.tsx"
 import { loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, TIMEZONE, formatMinute, saoPauloDate } from "../../lib/dates.ts"
@@ -26,19 +26,6 @@ const TABS: { id: Tab; label: string; icon: GlyphName }[] = [
   { id: "historico", label: "Histórico", icon: "clock" },
   { id: "dados", label: "Dados", icon: "user" },
 ]
-
-const WASH = [
-  { background: "#e8eefe", color: "#2f3f9a" },
-  { background: "#e7f6f2", color: "#1f6b58" },
-  { background: "#f8f0e4", color: "#8a5a20" },
-  { background: "#f3eef8", color: "#5c3d86" },
-]
-
-function washFor(name: string) {
-  let index = 0
-  for (const char of name) index = (index + char.charCodeAt(0)) % WASH.length
-  return WASH[index] ?? WASH[0]
-}
 
 function dayName(day: number) {
   const name = DIAS[day] ?? ""
@@ -229,7 +216,7 @@ export function TeacherPage() {
   if (!person) {
     return (
       <Page bare title="Professor">
-        <Link className="back" to="/escola/professores">Professores</Link>
+        <Button variant="link" className="w-fit px-0" nativeButton={false} render={<Link to="/escola/professores" />}>Professores</Button>
         <ErrorNote>{error ?? query.error ?? "Professor não encontrado."}</ErrorNote>
       </Page>
     )
@@ -253,37 +240,34 @@ export function TeacherPage() {
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "pt-BR"))
   const pupilIds = [...new Set(active.map((item) => item.aluno_id))]
-  const wash = washFor(person.nome)
   const greeting = whatsAppUrl(person.telefone, `Oi, ${firstName}.`)
 
   return (
     <Page bare title={person.nome}>
-      <div className="student-screen">
-        <Link className="back" to="/escola/professores">Professores</Link>
-        <header className="student-hero">
-          <span className="student-avatar" style={{ background: wash.background, color: wash.color }} aria-hidden="true">
-            {person.nome.trim().charAt(0).toUpperCase() || "?"}
-          </span>
-          <div className="student-identity">
-            <h1>
+      <div className="grid gap-4">
+        <Button variant="link" className="w-fit px-0" nativeButton={false} render={<Link to="/escola/professores" />}>Professores</Button>
+        <header className="flex flex-wrap items-center gap-3">
+          <PersonMark name={person.nome} />
+          <div className="grid min-w-0 flex-1">
+            <h1 className="flex flex-wrap items-center gap-2 font-heading text-2xl font-medium tracking-tight">
               {person.nome}
-              {admin ? <span className="badge hero-badge">Administra</span> : null}
+              {admin ? <ToneBadge>Administra</ToneBadge> : null}
             </h1>
-            <p>
+            <p className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
               {person.email ? <span>{person.email}</span> : null}
               {person.telefone ? <span>{formatPhone(person.telefone)}</span> : null}
               {person.criadoEm ? <span>Desde {sinceLabel(person.criadoEm)}</span> : null}
             </p>
           </div>
-          <div className="student-hero-actions">
+          <div className="flex items-center gap-1">
             {person.telefone ? (
-              <a className="icon-btn" href={greeting} target="_blank" rel="noreferrer" aria-label="WhatsApp">
+              <Button variant="outline" size="icon" nativeButton={false} render={<a href={greeting} target="_blank" rel="noreferrer" aria-label="WhatsApp" />}>
                 <Glyph name="chat" size={16} />
-              </a>
+              </Button>
             ) : null}
-            <Link className="icon-btn" to="/escola/agenda" aria-label="Agenda">
+            <Button variant="outline" size="icon" nativeButton={false} render={<Link to="/escola/agenda" aria-label="Agenda" />}>
               <Glyph name="calendar" size={16} />
-            </Link>
+            </Button>
             <Menu label="Mais ações">
               <DropdownMenuItem render={<Link to="/escola/agenda" />}>Agenda</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setTab("instrumentos")}>
@@ -305,29 +289,30 @@ export function TeacherPage() {
         </Tabs>
 
         {tab !== "dados" ? (
-          <div className="kpis student-kpis">
-            <Kpi icon="calendar" tone="rose" value={String(active.length)} label="Aulas ativas" />
-            <Kpi icon="people" tone="lilac" value={String(pupilIds.length)} label="Alunos" />
-            <Kpi icon="note" tone="gold" value={String(taught.length)} label="Instrumentos" />
-            <Kpi icon="cap" tone="sand" value={String(active.length)} label="Aulas na semana" />
-          </div>
+          <StatGrid>
+            <Stat icon={<Glyph name="calendar" />} value={active.length} label="Aulas ativas" />
+            <Stat icon={<Glyph name="people" />} value={pupilIds.length} label="Alunos" />
+            <Stat icon={<Glyph name="note" />} value={taught.length} label="Instrumentos" />
+            <Stat icon={<Glyph name="coin" />} value={formatMoney(active.reduce((sum, item) => sum + item.valor_mensal_centavos, 0))} label="Mensalidade" />
+          </StatGrid>
         ) : null}
 
         <ErrorNote>{error ?? query.error}</ErrorNote>
         {notice ? <p className="muted" role="status">{notice}</p> : null}
 
         {tab === "aulas" ? (
-          <div className="student-board">
-            <section className="panel">
-              <div className="panel-head">
-                <h2>Aulas</h2>
-                <Link className="text-action" to="/escola/agenda">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
+            <Panel
+              title="Aulas"
+              action={
+                <Button variant="link" className="h-auto px-0" nativeButton={false} render={<Link to="/escola/agenda" />}>
                   <Glyph name="plus" size={14} />
                   Nova aula
-                </Link>
-              </div>
+                </Button>
+              }
+            >
               {active.length === 0 ? <Empty>Nenhuma aula com este professor. A nova aula é criada na agenda.</Empty> : null}
-              <div className="enroll-list">
+              <div className="grid gap-3">
                 {active.map((matricula) => (
                   <ClassCard
                     key={matricula.id}
@@ -337,37 +322,39 @@ export function TeacherPage() {
                   />
                 ))}
               </div>
-            </section>
-            <aside className="student-side">
-              <section className="panel">
-                <div className="panel-head">
-                  <h2>Instrumentos</h2>
-                  <button className="text-action" type="button" onClick={() => setTab("instrumentos")}>
+            </Panel>
+            <aside className="grid gap-4">
+              <Panel
+                title="Instrumentos"
+                action={
+                  <Button variant="link" className="h-auto px-0" type="button" onClick={() => setTab("instrumentos")}>
                     <Glyph name="pencil" size={14} />
                     Editar
-                  </button>
-                </div>
-                {taught.length === 0 ? <p className="muted">Nenhum instrumento.</p> : (
-                  <span className="instrument-list">
+                  </Button>
+                }
+              >
+                {taught.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum instrumento.</p> : (
+                  <span className="flex flex-wrap gap-1">
                     {taught.map((name) => (
-                      <span key={name} className="instrument-chip">
-                        <Glyph name={instrumentGlyph(name)} size={15} />
+                      <span key={name} className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs">
+                        <Glyph name={instrumentGlyph(name)} size={14} />
                         {name}
                       </span>
                     ))}
                   </span>
                 )}
-              </section>
-              <section className="panel">
-                <div className="panel-head">
-                  <h2>Contato</h2>
-                  {editContact ? null : (
-                    <button className="text-action" type="button" onClick={() => setEditContact(true)}>
+              </Panel>
+              <Panel
+                title="Contato"
+                action={
+                  editContact ? null : (
+                    <Button variant="link" className="h-auto px-0" type="button" onClick={() => setEditContact(true)}>
                       <Glyph name="pencil" size={14} />
                       Editar
-                    </button>
-                  )}
-                </div>
+                    </Button>
+                  )
+                }
+              >
                 {editContact ? (
                   <form className="stack" onSubmit={(event) => void saveContact(event)}>
                     <label>
@@ -405,96 +392,95 @@ export function TeacherPage() {
                     </div>
                   </form>
                 ) : (
-                  <ul className="fact-list">
-                    <li>
+                  <ul className="grid gap-2 text-sm">
+                    <li className="flex items-center gap-2">
                       <Glyph name="phone" size={15} />
                       <span>{formatPhone(person.telefone) || "Sem telefone"}</span>
                       {person.telefone ? (
-                        <a className="mini-wa" href={greeting} target="_blank" rel="noreferrer" aria-label="WhatsApp">
+                        <Button variant="ghost" size="icon-sm" nativeButton={false} render={<a href={greeting} target="_blank" rel="noreferrer" aria-label="WhatsApp" />}>
                           <Glyph name="chat" size={14} />
-                        </a>
+                        </Button>
                       ) : null}
                     </li>
-                    <li>
+                    <li className="flex items-center gap-2">
                       <Glyph name="mail" size={15} />
                       <span>{person.email || "Sem e-mail"}</span>
                     </li>
-                    <li>
+                    <li className="flex items-center gap-2">
                       <Glyph name="cake" size={15} />
                       <span>{person.nascimento ? birthLabel(person.nascimento) : "—"}</span>
                     </li>
-                    <li>
+                    <li className="flex items-center gap-2">
                       <Glyph name="user" size={15} />
                       <span>{person.instagram || "—"}</span>
                     </li>
                   </ul>
                 )}
-              </section>
+              </Panel>
             </aside>
           </div>
         ) : null}
 
         {tab === "alunos" ? (
-          <section className="panel">
+          <Panel title="Alunos">
             {pupilIds.length === 0 ? <Empty>Nenhum aluno com aula ativa.</Empty> : (
-              <ul className="record-list">
+              <ul>
                 {pupilIds.map((alunoId) => {
                   const classes = active.filter((item) => item.aluno_id === alunoId)
                   return (
-                    <li key={alunoId}>
-                      <Link to={`/escola/alunos/${alunoId}`}>
-                        <strong>{students.get(alunoId) ?? "Aluno"}</strong>
-                        <small>
-                          {classes
-                            .map((item) => `${names.get(item.instrumento_id) ?? "Aula"} · ${dayName(item.dia_semana)} ${formatMinute(item.inicio_minuto)}`)
-                            .join(" · ")}
-                        </small>
-                      </Link>
-                      <span className="badge" data-status="em-aula">
-                        {classes.length === 1 ? "1 aula" : `${classes.length} aulas`}
-                      </span>
-                    </li>
+                    <Record
+                      key={alunoId}
+                      to={`/escola/alunos/${alunoId}`}
+                      title={students.get(alunoId) ?? "Aluno"}
+                      detail={
+                        <span className="grid">
+                          {classes.map((item) => (
+                            <span key={item.id}>
+                              {names.get(item.instrumento_id) ?? "Aula"} · {dayName(item.dia_semana)}, {formatMinute(item.inicio_minuto)}
+                            </span>
+                          ))}
+                        </span>
+                      }
+                      extra={<ToneBadge tone="em-aula">{classes.length === 1 ? "1 aula" : `${classes.length} aulas`}</ToneBadge>}
+                    />
                   )
                 })}
               </ul>
             )}
-          </section>
+          </Panel>
         ) : null}
 
         {tab === "instrumentos" ? (
-          <section className="panel stack data-form">
-            <h2>Instrumentos</h2>
+          <Panel title="Instrumentos">
             <InstrumentPicks instruments={instruments} selected={selected} locked={locked} onChange={setSelected} />
             {locked.length > 0 ? <p className="muted">Instrumento com aula ativa permanece marcado.</p> : null}
-            <Button  type="button" disabled={!dirty || busy} onClick={() => void saveInstruments()}>
+            <Button type="button" disabled={!dirty || busy} onClick={() => void saveInstruments()}>
               Salvar instrumentos
             </Button>
-          </section>
+          </Panel>
         ) : null}
 
         {tab === "historico" ? (
-          <section className="panel">
+          <Panel title="Aulas encerradas">
             {ended.length === 0 ? <Empty>Nenhuma aula encerrada.</Empty> : (
-              <ul className="record-list">
+              <ul>
                 {ended.map((item) => (
-                  <li key={item.id}>
-                    <span>
-                      <strong>{students.get(item.aluno_id) ?? "Aluno"}</strong>
-                      <small>
-                        {names.get(item.instrumento_id) ?? "Aula"} · {dayName(item.dia_semana)} {formatMinute(item.inicio_minuto)}
-                      </small>
-                    </span>
-                    <span className="badge" data-status="cancelada">Encerrada</span>
-                  </li>
+                  <Record
+                    key={item.id}
+                    to={`/escola/alunos/${item.aluno_id}`}
+                    title={students.get(item.aluno_id) ?? "Aluno"}
+                    detail={`${names.get(item.instrumento_id) ?? "Aula"} · ${dayName(item.dia_semana)}, ${formatMinute(item.inicio_minuto)}`}
+                    extra={<ToneBadge tone="cancelada">Encerrada</ToneBadge>}
+                  />
                 ))}
               </ul>
             )}
-          </section>
+          </Panel>
         ) : null}
 
         {tab === "dados" ? (
-          <form className="panel stack data-form" onSubmit={(event) => void saveContact(event)}>
-            <h2>Dados do professor</h2>
+          <form onSubmit={(event) => void saveContact(event)}>
+          <Panel title="Dados do professor">
             <label>
               Telefone
               <Input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
@@ -512,7 +498,8 @@ export function TeacherPage() {
               Outra rede
               <Input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
             </label>
-            <Button  type="submit" disabled={busy}>Salvar contato</Button>
+            <Button type="submit" disabled={busy}>Salvar contato</Button>
+          </Panel>
           </form>
         ) : null}
       </div>
@@ -520,45 +507,31 @@ export function TeacherPage() {
   )
 }
 
-function Kpi({ icon, tone, value, label }: { icon: GlyphName; tone: string; value: string; label: string }) {
-  return (
-    <article className="kpi">
-      <span className="kpi-icon" data-tone={tone}>
-        <Glyph name={icon} />
-      </span>
-      <span>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </span>
-    </article>
-  )
-}
-
 function ClassCard({ matricula, instrument, student }: { matricula: Matricula; instrument: string; student: string }) {
   const tone = toneFor(instrument)
   return (
-    <article className="enroll-card">
-      <span className="enroll-mark" style={{ background: tone.background, color: tone.bar }}>
+    <article className="flex gap-3 rounded-xl bg-muted/40 p-3 ring-1 ring-foreground/10">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg" style={{ background: tone.background, color: tone.bar }}>
         <Glyph name={instrumentGlyph(instrument)} size={16} />
       </span>
-      <div className="enroll-copy">
-        <div className="enroll-title">
+      <div className="grid min-w-0 flex-1 gap-1">
+        <div className="flex items-center gap-2">
           <strong>
             <Link to={`/escola/alunos/${matricula.aluno_id}`}>{student}</Link>
           </strong>
-          <span className="badge" data-status="realizada">Ativa</span>
+          <ToneBadge tone="realizada">Ativa</ToneBadge>
         </div>
         <p>{instrument}</p>
-        <ul>
-          <li>
+        <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <li className="inline-flex items-center gap-1.5">
             <Glyph name="calendar" size={14} />
             {dayName(matricula.dia_semana)}, {formatMinute(matricula.inicio_minuto)}
           </li>
-          <li>
+          <li className="inline-flex items-center gap-1.5">
             <Glyph name="clock" size={14} />
             {durationLabel(matricula.duracao_minutos)}
           </li>
-          <li>
+          <li className="inline-flex items-center gap-1.5">
             <Glyph name="coin" size={14} />
             {formatMoney(matricula.valor_mensal_centavos)} / mês
           </li>

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { Empty, ErrorNote, ListSkeleton, Page, StatsSkeleton, StatusBadge } from "../../components/chrome.tsx"
+import { Empty, ErrorNote, ListSkeleton, Page, Stat, StatGrid, StatsSkeleton, StatusBadge, ToneBadge } from "../../components/chrome.tsx"
 import { loadAulas, loadInstrumentos, loadMensalidades, loadPessoas, nomesPorId } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { addDays, formatMinute, formatWhen, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
@@ -77,24 +77,15 @@ export function TodayPage() {
         </>
       ) : (
         <>
-      <div className="stats">
-        <article>
-          <strong>{aulas.length}</strong>
-          <span>aulas hoje</span>
-        </article>
-        <article>
-          <strong>{atrasadas.length}</strong>
-          <span>mensalidades vencidas</span>
-        </article>
-        <article>
-          <strong>{formatMoney(abertas.reduce((sum, item) => sum + item.valor_centavos, 0))}</strong>
-          <span>em aberto</span>
-        </article>
-      </div>
-      <section className="stack">
-        <h2>Aulas</h2>
+      <StatGrid>
+        <Stat value={aulas.length} label="aulas hoje" />
+        <Stat value={atrasadas.length} label="mensalidades vencidas" />
+        <Stat value={formatMoney(abertas.reduce((sum, item) => sum + item.valor_centavos, 0))} label="em aberto" />
+      </StatGrid>
+      <section className="grid gap-3">
+        <h2 className="font-heading text-base font-medium">Aulas</h2>
         {aulas.length === 0 ? <Empty>Nenhuma aula hoje.</Empty> : null}
-        <ul className="today-list">
+        <ul className="grid gap-2">
           {aulas.map((aula) => {
             const nome = nomes.get(aula.aluno_id) ?? "Aluno"
             const instrumento = instrumentos.get(aula.instrumento_id) ?? "Aula"
@@ -106,8 +97,8 @@ export function TodayPage() {
               ? whatsAppUrl(telefone, confirmationMessage(nome, instrumento, formatWhen(aula.inicio), confirmationUrl(token)))
               : ""
             return (
-              <li key={aula.id} className="today-lesson">
-                <Link className="today-lesson-main" to={`/escola/aulas/${aula.id}`}>
+              <li key={aula.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3 ring-1 ring-foreground/10">
+                <Link className="flex min-w-0 flex-1 items-center gap-3" to={`/escola/aulas/${aula.id}`}>
                   <time dateTime={aula.inicio}>{formatMinute(saoPauloClock(aula.inicio).minute)}</time>
                   <span>
                     <strong>{nome}</strong>
@@ -115,12 +106,8 @@ export function TodayPage() {
                   </span>
                   <span className="lesson-actions">
                     <StatusBadge value={aula.situacao} />
-                    {aula.confirmacao === "confirmada" ? (
-                      <span className="badge" data-status="realizada">Confirmada</span>
-                    ) : null}
-                    {open && aula.confirmacao === "pendente" ? (
-                      <span className="badge" data-status="aberta">Aguardando</span>
-                    ) : null}
+                    {aula.confirmacao === "confirmada" ? <ToneBadge tone="realizada">Confirmada</ToneBadge> : null}
+                    {open && aula.confirmacao === "pendente" ? <ToneBadge tone="aberta">Aguardando</ToneBadge> : null}
                   </span>
                 </Link>
                 {link ? (

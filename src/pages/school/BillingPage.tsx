@@ -2,10 +2,10 @@ import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { CardSkeleton, Empty, ErrorNote, Page, StatsSkeleton, StatusBadge } from "../../components/chrome.tsx"
-import { loadConfiguracao, loadInstrumentos, loadMensalidades, loadPessoas } from "../../data/api.ts"
+import { CardSkeleton, Empty, ErrorNote, Page, Stat, StatGrid, StatsSkeleton, StatusBadge } from "../../components/chrome.tsx"
+import { loadConfiguracao, loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
-import { currentMonth, formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
+import { DIAS, currentMonth, formatDate, formatMinute, formatMonth, saoPauloDate } from "../../lib/dates.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoney } from "../../lib/format.ts"
 import { pixCopiaECola } from "../../lib/pix.ts"
@@ -42,6 +42,13 @@ type BillingData = {
   people: Pessoa[]
   config: Configuracao | null
   instrumentos: Map<string, string>
+  horarios: Map<string, string>
+}
+
+function slotOf(day: number, minute: number) {
+  const name = DIAS[day] ?? ""
+  const label = name ? name.charAt(0).toUpperCase() + name.slice(1) : ""
+  return `${label}, ${formatMinute(minute)}`
 }
 
 async function loadBilling(month: string): Promise<BillingData> {
@@ -51,17 +58,19 @@ async function loadBilling(month: string): Promise<BillingData> {
     })
     if (generateError) throw generateError
   }
-  const [items, students, school, instruments] = await Promise.all([
+  const [items, students, school, instruments, enrollments] = await Promise.all([
     loadMensalidades(),
     loadPessoas("aluno"),
     loadConfiguracao(),
     loadInstrumentos(),
+    loadMatriculas(),
   ])
   return {
     charges: items,
     people: students,
     config: school,
     instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
+    horarios: new Map(enrollments.map((item) => [item.id, slotOf(item.dia_semana, item.inicio_minuto)])),
   }
 }
 
@@ -72,6 +81,7 @@ export function BillingPage() {
   const people = billing.data?.people ?? []
   const config = billing.data?.config ?? null
   const instrumentos = billing.data?.instrumentos ?? new Map<string, string>()
+  const horarios = billing.data?.horarios ?? new Map<string, string>()
   const [payError, setPayError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const loading = billing.pending && !billing.data
@@ -129,47 +139,40 @@ export function BillingPage() {
       title="Mensalidades"
       lede={lede}
       action={
-        <div className="month-nav">
-          <button type="button" aria-label="Mês anterior" onClick={() => setMonth(shiftMonth(month, -1))}>
+        <div className="flex items-center gap-1">
+          <Button type="button" size="icon" variant="outline" aria-label="Mês anterior" onClick={() => setMonth(shiftMonth(month, -1))}>
             ‹
-          </button>
-          <strong>{monthTitle(month)}</strong>
-          <button type="button" aria-label="Próximo mês" onClick={() => setMonth(shiftMonth(month, 1))}>
+          </Button>
+          <strong className="min-w-28 text-center text-sm font-medium">{monthTitle(month)}</strong>
+          <Button type="button" size="icon" variant="outline" aria-label="Próximo mês" onClick={() => setMonth(shiftMonth(month, 1))}>
             ›
-          </button>
+          </Button>
         </div>
       }
     >
       <ErrorNote>{payError ?? billing.error}</ErrorNote>
       {info ? <p className="muted" role="status">{info}</p> : null}
-      {loading ? <StatsSkeleton /> : <div className="stats">
-        <article>
-          <strong>{formatMoney(openSum)}</strong>
-          <span>em aberto</span>
-        </article>
-        <article>
-          <strong>{late.length}</strong>
-          <span>{late.length === 1 ? "vencida" : "vencidas"}</span>
-        </article>
-        <article>
-          <strong>{formatMoney(paidSum)}</strong>
-          <span>recebido</span>
-        </article>
-      </div>}
-      <div className="roster-tools">
+      {loading ? <StatsSkeleton /> : (
+        <StatGrid>
+          <Stat value={formatMoney(openSum)} label="em aberto" />
+          <Stat value={late.length} label={late.length === 1 ? "vencida" : "vencidas"} />
+          <Stat value={formatMoney(paidSum)} label="recebido" />
+        </StatGrid>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Input
-          className="roster-search"
+          className="lg:max-w-xs"
           type="search"
           value={search}
           placeholder="Buscar aluno ou instrumento"
           aria-label="Buscar mensalidade"
           onChange={(event) => setSearch(event.target.value)}
         />
-        <div className="roster-filters" role="group" aria-label="Situação">
-          <button type="button" aria-pressed={view === "todas"} onClick={() => setView("todas")}>Todas</button>
-          <button type="button" aria-pressed={view === "aberta"} onClick={() => setView("aberta")}>Em aberto</button>
-          <button type="button" aria-pressed={view === "vencida"} onClick={() => setView("vencida")}>Vencidas</button>
-          <button type="button" aria-pressed={view === "paga"} onClick={() => setView("paga")}>Pagas</button>
+        <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1" role="group" aria-label="Situação">
+          <Button type="button" size="sm" variant={view === "todas" ? "secondary" : "ghost"} aria-pressed={view === "todas"} onClick={() => setView("todas")}>Todas</Button>
+          <Button type="button" size="sm" variant={view === "aberta" ? "secondary" : "ghost"} aria-pressed={view === "aberta"} onClick={() => setView("aberta")}>Em aberto</Button>
+          <Button type="button" size="sm" variant={view === "vencida" ? "secondary" : "ghost"} aria-pressed={view === "vencida"} onClick={() => setView("vencida")}>Vencidas</Button>
+          <Button type="button" size="sm" variant={view === "paga" ? "secondary" : "ghost"} aria-pressed={view === "paga"} onClick={() => setView("paga")}>Pagas</Button>
         </div>
       </div>
       {loading ? (
@@ -181,10 +184,11 @@ export function BillingPage() {
       ) : visible.length === 0 ? (
         <Empty>Nenhuma mensalidade encontrada.</Empty>
       ) : (
-        <div className="stack">
+        <div className="grid gap-3">
           {visible.map((charge) => {
             const person = pessoas.get(charge.aluno_id)
             const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
+            const horario = horarios.get(charge.matricula_id) ?? ""
             const tone = toneFor(instrumento)
             const isLate = charge.situacao === "aberta" && charge.vencimento < today
             const isPaid = charge.situacao === "paga"
@@ -213,21 +217,27 @@ export function BillingPage() {
             }
             const when = isPaid ? paidOn(charge.paga_em) : formatDate(charge.vencimento)
             return (
-              <article key={charge.id} className={`card enrollment pay-card${isPaid ? " is-paid" : ""}`}>
-                <span className="enrollment-bar" style={{ background: tone.bar }} />
-                <div className="row spread">
-                  <strong>
-                    {person ? <Link to={`/escola/alunos/${person.id}`}>{person.nome}</Link> : "Aluno"}
-                  </strong>
-                  <StatusBadge value={charge.situacao} />
+              <article key={charge.id} className="grid gap-3 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid min-w-0 gap-0.5">
+                    <span className="flex items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full" style={{ background: tone.bar }} />
+                      <strong className="font-medium">
+                        {person ? <Link to={`/escola/alunos/${person.id}`}>{person.nome}</Link> : "Aluno"}
+                      </strong>
+                    </span>
+                    <p className="text-muted-foreground">{[instrumento, horario].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <div className="grid justify-items-end gap-1">
+                    <span className={`text-lg font-medium tabular-nums ${isPaid ? "text-muted-foreground" : ""}`}>{formatMoney(charge.valor_centavos)}</span>
+                    <StatusBadge value={charge.situacao} />
+                  </div>
                 </div>
-                <p className="muted">{instrumento}</p>
-                <p className="pay-amount">{formatMoney(charge.valor_centavos)}</p>
-                <p className={isLate ? "late" : "muted"}>
+                <p className={isLate ? "font-medium text-[var(--warn)]" : "text-muted-foreground"}>
                   {isPaid ? (when ? `Recebida em ${when}` : "Recebida") : isLate ? `Venceu em ${when}` : `Vence em ${when}`}
                 </p>
                 {charge.situacao === "aberta" ? (
-                  <div className="row">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button  type="button" onClick={() => void markPaid(charge.id)}>
                       Dar baixa
                     </Button>
@@ -238,7 +248,7 @@ export function BillingPage() {
                     ) : !config?.chave_pix ? (
                       <Button variant="outline" nativeButton={false} render={<Link to="/escola/configuracao" />}>Configurar Pix</Button>
                     ) : (
-                      <span className="muted">Este aluno está sem telefone.</span>
+                      <span className="text-sm text-muted-foreground">Este aluno está sem telefone.</span>
                     )}
                     {payload ? (
                       <Button variant="outline" type="button" onClick={() => setPixId(pixId === charge.id ? null : charge.id)}>

@@ -9,6 +9,7 @@ import { formatWhen, saoPauloDate, saoPauloTimestamp } from "../lib/dates.ts"
 import { humanError } from "../lib/errors.ts"
 import type { RecadoLink, SituacaoAula } from "../types.ts"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -93,8 +94,9 @@ export function LessonPage() {
       </p>
       <ErrorNote>{error ?? query.error}</ErrorNote>
       {canEdit ? (
-        <section className="card stack">
-          <h2>Esta aula</h2>
+        <Card>
+          <CardContent className="grid gap-3">
+          <h2 className="font-heading text-base font-medium">Esta aula</h2>
           <div className="row">
             {(["realizada", "falta", "prevista"] as SituacaoAula[]).map((situacao) => (
               <Button
@@ -146,14 +148,15 @@ export function LessonPage() {
               Remarcar
             </Button>
           </form>
-        </section>
+          </CardContent>
+        </Card>
       ) : null}
 
       <section className="stack">
         <h2>Recados</h2>
         {recados.length === 0 ? <p className="empty">Nenhum recado nesta aula.</p> : null}
         {recados.map((recado) => (
-          <article key={recado.id} className="card">
+          <Card key={recado.id}><CardContent className="grid gap-2">
             <p>{recado.texto}</p>
             {recado.links.length > 0 ? (
               <ul>
@@ -166,14 +169,16 @@ export function LessonPage() {
                 ))}
               </ul>
             ) : null}
-            <p className="muted">{formatWhen(recado.criado_em)}</p>
-          </article>
+            <p className="text-sm text-muted-foreground">{formatWhen(recado.criado_em)}</p>
+          </CardContent></Card>
         ))}
       </section>
 
       {canEdit ? (
-        <form className="card stack" onSubmit={saveNote}>
-          <h2>Novo recado</h2>
+        <Card>
+        <CardContent>
+        <form className="grid gap-3" onSubmit={saveNote}>
+          <h2 className="font-heading text-base font-medium">Novo recado</h2>
           <label>
             Texto
             <Textarea value={texto} onChange={(event) => setTexto(event.target.value)} rows={4} />
@@ -219,6 +224,8 @@ export function LessonPage() {
             </Button>
           </div>
         </form>
+        </CardContent>
+        </Card>
       ) : null}
     </Page>
   )

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { Glyph, instrumentGlyph } from "../../components/glyphs.tsx"
-import { Empty, ErrorNote, ListSkeleton, Menu, Page } from "../../components/chrome.tsx"
+import { Empty, ErrorNote, ListSkeleton, Menu, Page, PersonMark, Stat, StatGrid, ToneBadge } from "../../components/chrome.tsx"
 import { loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, TIMEZONE, formatMinute, saoPauloDate, timeToMinute } from "../../lib/dates.ts"
@@ -10,8 +10,10 @@ import { client } from "../../lib/supabase.ts"
 import { whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Matricula, Pessoa } from "../../types.ts"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 
 type View = "todos" | "aula" | "livre"
@@ -19,14 +21,6 @@ type Layout = "tabela" | "cartoes"
 type SortKey = "nome" | "instrumento" | "proxima" | "status"
 
 const SHORT_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
-const WASH = [
-  { background: "#e8eefe", color: "#2f3f9a" },
-  { background: "#e7f6f2", color: "#1f6b58" },
-  { background: "#f8f0e4", color: "#8a5a20" },
-  { background: "#f3eef8", color: "#5c3d86" },
-  { background: "#eef1f6", color: "#3d4a5c" },
-  { background: "#f8ecee", color: "#8a3a48" },
-]
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
@@ -59,16 +53,6 @@ function waitMinutes(day: number, minute: number, nowDay: number, nowMinute: num
   let delta = weekIndex(day) - weekIndex(nowDay)
   if (delta < 0 || (delta === 0 && minute <= nowMinute)) delta += 7
   return delta * 24 * 60 + (minute - nowMinute)
-}
-
-function washFor(name: string) {
-  let index = 0
-  for (const char of name) index = (index + char.charCodeAt(0)) % WASH.length
-  return WASH[index] ?? WASH[0]
-}
-
-function initial(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?"
 }
 
 type StudentsData = {
@@ -206,48 +190,42 @@ export function StudentsPage() {
     >
       <ErrorNote>{list.error}</ErrorNote>
       {loading ? (
-        <div className="kpis" aria-busy="true" aria-label="Carregando">
+        <StatGrid>
           {Array.from({ length: 4 }, (_, index) => (
-            <article key={index} className="kpi skeleton-kpi" />
+            <Stat key={index} value="—" label="Carregando" />
           ))}
-        </div>
+        </StatGrid>
       ) : (
-        <div className="kpis">
-          <Kpi icon="people" tone="rose" value={people.length} label="Alunos ativos" />
-          <Kpi icon="cap" tone="lilac" value={withClass} label="Com aula esta semana" />
-          <Kpi icon="calendar" tone="sand" value={withoutClass} label="Sem aula" />
-          <Kpi icon="clock" tone="gold" value={openLessons} label={openLessons === 1 ? "Aula em aberto" : "Aulas em aberto"} />
-        </div>
+        <StatGrid>
+          <Stat icon={<Glyph name="people" />} value={people.length} label="Alunos ativos" />
+          <Stat icon={<Glyph name="cap" />} value={withClass} label="Com aula esta semana" />
+          <Stat icon={<Glyph name="calendar" />} value={withoutClass} label="Sem aula" />
+          <Stat icon={<Glyph name="clock" />} value={openLessons} label={openLessons === 1 ? "Aula em aberto" : "Aulas em aberto"} />
+        </StatGrid>
       )}
 
-      <section className="directory">
-        <div className="directory-bar">
-          <div className="directory-filters" role="group" aria-label="Situação">
-            <button type="button" aria-pressed={view === "todos"} onClick={() => setView("todos")}>
-              Todos ({people.length})
-            </button>
-            <button type="button" aria-pressed={view === "aula"} onClick={() => setView("aula")}>
-              Com aula ({withClass})
-            </button>
-            <button type="button" aria-pressed={view === "livre"} onClick={() => setView("livre")}>
-              Sem aula ({withoutClass})
-            </button>
+      <section className="grid gap-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1" role="group" aria-label="Situação">
+            <FilterChip pressed={view === "todos"} onClick={() => setView("todos")}>Todos ({people.length})</FilterChip>
+            <FilterChip pressed={view === "aula"} onClick={() => setView("aula")}>Com aula ({withClass})</FilterChip>
+            <FilterChip pressed={view === "livre"} onClick={() => setView("livre")}>Sem aula ({withoutClass})</FilterChip>
           </div>
           <Input
-            className="roster-search"
+            className="lg:ml-auto lg:max-w-xs"
             type="search"
             value={search}
             placeholder="Buscar aluno, telefone ou instrumento..."
             aria-label="Buscar aluno"
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className="view-switch" role="group" aria-label="Visualização">
-            <button type="button" aria-pressed={layout === "tabela"} aria-label="Lista" onClick={() => setLayout("tabela")}>
+          <div className="flex gap-1" role="group" aria-label="Visualização">
+            <Button type="button" size="icon" variant={layout === "tabela" ? "secondary" : "outline"} aria-pressed={layout === "tabela"} aria-label="Lista" onClick={() => setLayout("tabela")}>
               <Glyph name="list" size={16} />
-            </button>
-            <button type="button" aria-pressed={layout === "cartoes"} aria-label="Cartões" onClick={() => setLayout("cartoes")}>
+            </Button>
+            <Button type="button" size="icon" variant={layout === "cartoes" ? "secondary" : "outline"} aria-pressed={layout === "cartoes"} aria-label="Cartões" onClick={() => setLayout("cartoes")}>
               <Glyph name="grid" size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -256,7 +234,7 @@ export function StudentsPage() {
         ) : rows.length === 0 ? (
           <Empty>Nenhum aluno encontrado.</Empty>
         ) : layout === "cartoes" ? (
-          <ul className="person-grid">
+          <ul className="grid gap-3 sm:grid-cols-2">
             {rows.map((row) => (
               <li key={row.person.id}>
                 <StudentTile
@@ -271,51 +249,40 @@ export function StudentsPage() {
             ))}
           </ul>
         ) : (
-          <div className="table-scroll">
-            <table className="person-table">
-              <thead>
-                <tr>
-                  <SortHead label="Aluno" active={sort === "nome"} ascending={ascending} onClick={() => toggleSort("nome")} />
-                  <SortHead label="Instrumento(s)" active={sort === "instrumento"} ascending={ascending} onClick={() => toggleSort("instrumento")} />
-                  <SortHead label="Próxima aula" active={sort === "proxima"} ascending={ascending} onClick={() => toggleSort("proxima")} />
-                  <SortHead label="Status" active={sort === "status"} ascending={ascending} onClick={() => toggleSort("status")} />
-                  <th aria-label="Ações" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.person.id}>
-                    <td>
-                      <PersonLink person={row.person} />
-                    </td>
-                    <td>
-                      {row.names.length === 0 ? (
-                        <span className="muted">—</span>
-                      ) : (
-                        <span className="instrument-list">
-                          {row.names.map((name) => (
-                            <span key={name} className="instrument-chip">
-                              <Glyph name={instrumentGlyph(name)} size={15} />
-                              {name}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <NextLesson next={row.next} teachers={teachers} instruments={instruments} />
-                    </td>
-                    <td>
-                      <span className="badge" data-status={row.status.tone}>{row.status.label}</span>
-                    </td>
-                    <td className="person-actions">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <SortHead label="Aluno" active={sort === "nome"} ascending={ascending} onClick={() => toggleSort("nome")} />
+                <SortHead label="Instrumento(s)" active={sort === "instrumento"} ascending={ascending} onClick={() => toggleSort("instrumento")} />
+                <SortHead label="Próxima aula" active={sort === "proxima"} ascending={ascending} onClick={() => toggleSort("proxima")} />
+                <SortHead label="Status" active={sort === "status"} ascending={ascending} onClick={() => toggleSort("status")} />
+                <TableHead aria-label="Ações" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.person.id}>
+                  <TableCell>
+                    <PersonLink person={row.person} />
+                  </TableCell>
+                  <TableCell>
+                    <InstrumentNames names={row.names} />
+                  </TableCell>
+                  <TableCell>
+                    <NextLesson next={row.next} teachers={teachers} instruments={instruments} />
+                  </TableCell>
+                  <TableCell>
+                    <ToneBadge tone={row.status.tone}>{row.status.label}</ToneBadge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
                       <RowActions person={row.person} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </section>
 
@@ -332,27 +299,11 @@ export function StudentsPage() {
   )
 }
 
-function Kpi({
-  icon,
-  tone,
-  value,
-  label,
-}: {
-  icon: "people" | "cap" | "calendar" | "clock"
-  tone: string
-  value: number
-  label: string
-}) {
+function FilterChip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <article className="kpi">
-      <span className="kpi-icon" data-tone={tone}>
-        <Glyph name={icon} />
-      </span>
-      <span>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </span>
-    </article>
+    <Button type="button" size="sm" variant={pressed ? "secondary" : "ghost"} aria-pressed={pressed} onClick={onClick}>
+      {children}
+    </Button>
   )
 }
 
@@ -368,26 +319,37 @@ function SortHead({
   onClick: () => void
 }) {
   return (
-    <th aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}>
-      <button type="button" onClick={onClick}>
+    <TableHead aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}>
+      <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={onClick}>
         {label}
-      </button>
-    </th>
+      </Button>
+    </TableHead>
   )
 }
 
 function PersonLink({ person }: { person: Pessoa }) {
-  const wash = washFor(person.nome)
   return (
-    <Link className="person-id" to={`/escola/alunos/${person.id}`}>
-      <span className="person-avatar" style={{ background: wash.background, color: wash.color }} aria-hidden="true">
-        {initial(person.nome)}
-      </span>
-      <span>
-        <strong>{person.nome}</strong>
-        <small>{formatPhone(person.telefone) || person.email}</small>
+    <Link className="flex items-center gap-2" to={`/escola/alunos/${person.id}`}>
+      <PersonMark name={person.nome} />
+      <span className="grid min-w-0">
+        <strong className="truncate font-medium">{person.nome}</strong>
+        <small className="truncate text-muted-foreground">{formatPhone(person.telefone) || person.email}</small>
       </span>
     </Link>
+  )
+}
+
+function InstrumentNames({ names }: { names: string[] }) {
+  if (names.length === 0) return <span className="text-muted-foreground">—</span>
+  return (
+    <span className="flex flex-wrap gap-1">
+      {names.map((name) => (
+        <span key={name} className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs">
+          <Glyph name={instrumentGlyph(name)} size={14} />
+          {name}
+        </span>
+      ))}
+    </span>
   )
 }
 
@@ -400,20 +362,14 @@ function NextLesson({
   teachers: Map<string, string>
   instruments: Map<string, string>
 }) {
-  if (!next) {
-    return (
-      <span className="next-lesson">
-        <strong>Sem aula semanal</strong>
-      </span>
-    )
-  }
+  if (!next) return <strong className="font-medium">Sem aula semanal</strong>
   const day = SHORT_DAYS[next.dia_semana] ?? DIAS[next.dia_semana] ?? ""
   return (
-    <span className="next-lesson">
-      <strong>
+    <span className="grid">
+      <strong className="font-medium">
         {day}, {formatMinute(next.inicio_minuto)}
       </strong>
-      <small>
+      <small className="text-muted-foreground">
         {instruments.get(next.instrumento_id) ?? "Aula"} · {teachers.get(next.professor_id) ?? "Professor"}
       </small>
     </span>
@@ -424,9 +380,9 @@ function RowActions({ person }: { person: Pessoa }) {
   const first = person.nome.trim().split(/\s+/)[0] || person.nome
   return (
     <>
-      <Link className="icon-btn" to="/escola/agenda" aria-label={`Agenda de ${person.nome}`}>
+      <Button variant="outline" size="icon" nativeButton={false} render={<Link to="/escola/agenda" aria-label={`Agenda de ${person.nome}`} />}>
         <Glyph name="calendar" size={16} />
-      </Link>
+      </Button>
       <Menu label={`Ações de ${person.nome}`}>
         <DropdownMenuItem render={<Link to={`/escola/alunos/${person.id}`} />}>Abrir ficha</DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/escola/agenda" />}>Abrir agenda</DropdownMenuItem>
@@ -456,23 +412,14 @@ function StudentTile({
   status: { label: string; tone: string }
 }) {
   return (
-    <article className="person-tile">
-      <PersonLink person={person} />
-      <span className="badge" data-status={status.tone}>{status.label}</span>
-      {names.length > 0 ? (
-        <span className="instrument-list">
-          {names.map((name) => (
-            <span key={name} className="instrument-chip">
-              <Glyph name={instrumentGlyph(name)} size={15} />
-              {name}
-            </span>
-          ))}
-        </span>
-      ) : (
-        <span className="muted">Sem instrumento</span>
-      )}
+    <article className="grid gap-3 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">
+      <div className="flex items-start justify-between gap-2">
+        <PersonLink person={person} />
+        <ToneBadge tone={status.tone}>{status.label}</ToneBadge>
+      </div>
+      <InstrumentNames names={names} />
       <NextLesson next={next} teachers={teachers} instruments={instruments} />
-      <div className="person-actions">
+      <div className="flex justify-end gap-1">
         <RowActions person={person} />
       </div>
     </article>
@@ -530,22 +477,13 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   }
 
   return (
-    <div
-      className="sheet"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pending) onClose()
-      }}
-    >
-      <form
-        className="sheet-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="invite-title"
-        onSubmit={onSubmit}
-      >
-        <h2 id="invite-title">Convidar aluno</h2>
-        <p className="muted">O convite chega por e-mail. A pessoa define a própria senha.</p>
+    <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Convidar aluno</DialogTitle>
+          <DialogDescription>O convite chega por e-mail. A pessoa define a própria senha.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-3" onSubmit={onSubmit}>
         <label>
           Nome
           <Input ref={nameRef} value={nome} onChange={(event) => setNome(event.target.value)} required />
@@ -586,15 +524,16 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
         </details>
         <ErrorNote>{error}</ErrorNote>
-        <div className="row">
+        <DialogFooter>
           <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
             Cancelar
           </Button>
-          <Button  type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? "Enviando…" : "Enviar convite"}
           </Button>
-        </div>
-      </form>
-    </div>
+        </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

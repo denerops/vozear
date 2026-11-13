@@ -2,9 +2,9 @@ import { useSession } from "../../auth/session.tsx"
 import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
 import { CardSkeleton, Empty, ErrorNote, Page, StatusBadge } from "../../components/chrome.tsx"
-import { loadConfiguracao, loadInstrumentos, loadMensalidades } from "../../data/api.ts"
+import { loadConfiguracao, loadInstrumentos, loadMatriculas, loadMensalidades } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
-import { formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
+import { DIAS, formatDate, formatMinute, formatMonth, saoPauloDate } from "../../lib/dates.ts"
 import { formatMoney } from "../../lib/format.ts"
 import { pixCopiaECola } from "../../lib/pix.ts"
 import type { Configuracao, Mensalidade } from "../../types.ts"
@@ -23,25 +23,33 @@ type PaymentsData = {
   charges: Mensalidade[]
   config: Configuracao | null
   instrumentos: Map<string, string>
+  horarios: Map<string, string>
 }
 
 export function PaymentsPage() {
   const session = useSession()
   const query = useQuery(session.userId ? `aluno:pagamentos:${session.userId}` : null, async () => {
-    const [items, school, instruments] = await Promise.all([
+    const [items, school, instruments, enrollments] = await Promise.all([
       loadMensalidades(session.userId ?? undefined),
       loadConfiguracao(),
       loadInstrumentos(),
+      loadMatriculas({ alunoId: session.userId ?? undefined }),
     ])
     return {
       charges: items,
       config: school,
       instrumentos: new Map(instruments.map((item) => [item.id, item.nome])),
+      horarios: new Map(enrollments.map((item) => {
+        const name = DIAS[item.dia_semana] ?? ""
+        const day = name ? name.charAt(0).toUpperCase() + name.slice(1) : ""
+        return [item.id, `${day}, ${formatMinute(item.inicio_minuto)}`]
+      })),
     } satisfies PaymentsData
   })
   const charges = query.data?.charges ?? []
   const config = query.data?.config ?? null
   const instrumentos = query.data?.instrumentos ?? new Map<string, string>()
+  const horarios = query.data?.horarios ?? new Map<string, string>()
   const loading = query.pending && !query.data
   const today = saoPauloDate()
 
@@ -63,11 +71,12 @@ export function PaymentsPage() {
         <Empty>Nenhuma mensalidade ainda.</Empty>
       ) : (
         <>
-          <section className="stack">
-            <h2>A pagar</h2>
+          <section className="grid gap-3">
+            <h2 className="font-heading text-base font-medium">A pagar</h2>
             {open.length === 0 ? <Empty>Nenhuma mensalidade em aberto.</Empty> : null}
             {open.map((charge) => {
               const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
+              const horario = horarios.get(charge.matricula_id) ?? ""
               const tone = toneFor(instrumento)
               const late = charge.vencimento < today
               const payload = config?.chave_pix
@@ -80,38 +89,48 @@ export function PaymentsPage() {
                   })
                 : ""
               return (
-                <article key={charge.id} className="card enrollment pay-card">
-                  <span className="enrollment-bar" style={{ background: tone.bar }} />
-                  <div className="row spread">
-                    <strong>{instrumento}</strong>
-                    <StatusBadge value={charge.situacao} />
+                <article key={charge.id} className="grid gap-3 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="grid min-w-0 gap-0.5">
+                      <span className="flex items-center gap-2">
+                        <span className="size-2 shrink-0 rounded-full" style={{ background: tone.bar }} />
+                        <strong className="font-medium">{[instrumento, horario].filter(Boolean).join(" · ")}</strong>
+                      </span>
+                      <p className="text-muted-foreground">{monthLabel(charge.competencia)}</p>
+                    </div>
+                    <div className="grid justify-items-end gap-1">
+                      <span className="text-lg font-medium tabular-nums">{formatMoney(charge.valor_centavos)}</span>
+                      <StatusBadge value={charge.situacao} />
+                    </div>
                   </div>
-                  <p className="muted">{monthLabel(charge.competencia)}</p>
-                  <p className="pay-amount">{formatMoney(charge.valor_centavos)}</p>
-                  <p className={late ? "late" : "muted"}>
+                  <p className={late ? "font-medium text-[var(--warn)]" : "text-muted-foreground"}>
                     {late ? `Venceu em ${formatDate(charge.vencimento)}` : `Vence em ${formatDate(charge.vencimento)}`}
                   </p>
-                  {payload ? <PixBlock payload={payload} /> : <p className="muted">A escola ainda não configurou a chave Pix.</p>}
+                  {payload ? <PixBlock payload={payload} /> : <p className="text-muted-foreground">A escola ainda não configurou a chave Pix.</p>}
                 </article>
               )
             })}
           </section>
           {paid.length > 0 ? (
-            <section className="stack">
-              <h2>Pagas</h2>
+            <section className="grid gap-3">
+              <h2 className="font-heading text-base font-medium">Pagas</h2>
               {paid.map((charge) => {
                 const instrumento = instrumentos.get(charge.instrumento_id) ?? "Aula"
+                const horario = horarios.get(charge.matricula_id) ?? ""
                 const when = paidOn(charge.paga_em)
                 return (
-                  <article key={charge.id} className="card enrollment pay-card is-paid">
-                    <span className="enrollment-bar" style={{ background: toneFor(instrumento).bar }} />
-                    <div className="row spread">
-                      <strong>{instrumento}</strong>
-                      <StatusBadge value={charge.situacao} />
+                  <article key={charge.id} className="grid gap-2 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="grid min-w-0 gap-0.5">
+                        <strong className="font-medium">{[instrumento, horario].filter(Boolean).join(" · ")}</strong>
+                        <p className="text-muted-foreground">{monthLabel(charge.competencia)}</p>
+                      </div>
+                      <div className="grid justify-items-end gap-1">
+                        <span className="text-lg font-medium text-muted-foreground tabular-nums">{formatMoney(charge.valor_centavos)}</span>
+                        <StatusBadge value={charge.situacao} />
+                      </div>
                     </div>
-                    <p className="muted">{monthLabel(charge.competencia)}</p>
-                    <p className="pay-amount">{formatMoney(charge.valor_centavos)}</p>
-                    <p className="muted">{when ? `Recebida em ${when}` : "Recebida"}</p>
+                    <p className="text-muted-foreground">{when ? `Recebida em ${when}` : "Recebida"}</p>
                   </article>
                 )
               })}

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { Glyph, instrumentGlyph } from "../../components/glyphs.tsx"
-import { Empty, ErrorNote, ListSkeleton, Menu, Page } from "../../components/chrome.tsx"
+import { Empty, ErrorNote, ListSkeleton, Menu, Page, PersonMark, Stat, StatGrid, ToneBadge } from "../../components/chrome.tsx"
 import { loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, TIMEZONE, formatMinute, saoPauloDate, timeToMinute } from "../../lib/dates.ts"
@@ -12,22 +12,16 @@ import { whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 type View = "todos" | "aula" | "livre"
 type Layout = "tabela" | "cartoes"
 type SortKey = "nome" | "instrumento" | "proxima" | "status"
 
 const SHORT_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
-const WASH = [
-  { background: "#e8eefe", color: "#2f3f9a" },
-  { background: "#e7f6f2", color: "#1f6b58" },
-  { background: "#f8f0e4", color: "#8a5a20" },
-  { background: "#f3eef8", color: "#5c3d86" },
-  { background: "#eef1f6", color: "#3d4a5c" },
-  { background: "#f8ecee", color: "#8a3a48" },
-]
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
@@ -62,16 +56,6 @@ function waitMinutes(day: number, minute: number, nowDay: number, nowMinute: num
   return delta * 24 * 60 + (minute - nowMinute)
 }
 
-function washFor(name: string) {
-  let index = 0
-  for (const char of name) index = (index + char.charCodeAt(0)) % WASH.length
-  return WASH[index] ?? WASH[0]
-}
-
-function initial(name: string) {
-  return name.trim().charAt(0).toUpperCase() || "?"
-}
-
 function sameIds(left: string[], right: string[]) {
   if (left.length !== right.length) return false
   const ids = new Set(right)
@@ -91,14 +75,16 @@ export function InstrumentPicks({
 }) {
   const choices = instruments.filter((item) => item.ativo || selected.includes(item.id))
   return (
-    <div className="instrument-picks" role="group" aria-label="Instrumentos">
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Instrumentos">
       {choices.map((item) => {
         const on = selected.includes(item.id)
         const fixed = locked.includes(item.id)
         return (
-          <button
+          <Button
             key={item.id}
             type="button"
+            size="sm"
+            variant={on ? "secondary" : "outline"}
             aria-pressed={on}
             disabled={fixed}
             title={fixed ? "Há aula ativa neste instrumento" : undefined}
@@ -106,9 +92,9 @@ export function InstrumentPicks({
               onChange(on ? selected.filter((id) => id !== item.id) : [...selected, item.id])
             }
           >
-            <i style={{ background: toneFor(item.nome).dot }} />
+            <i className="size-2 rounded-full" style={{ background: toneFor(item.nome).dot }} />
             {item.nome}
-          </button>
+          </Button>
         )
       })}
     </div>
@@ -241,48 +227,42 @@ export function TeachersPage() {
     >
       <ErrorNote>{list.error}</ErrorNote>
       {loading ? (
-        <div className="kpis" aria-busy="true" aria-label="Carregando">
+        <StatGrid>
           {Array.from({ length: 4 }, (_, index) => (
-            <article key={index} className="kpi skeleton-kpi" />
+            <Stat key={index} value="—" label="Carregando" />
           ))}
-        </div>
+        </StatGrid>
       ) : (
-        <div className="kpis">
-          <Kpi icon="people" tone="rose" value={people.length} label="Professores ativos" />
-          <Kpi icon="cap" tone="lilac" value={withStudents} label="Com alunos" />
-          <Kpi icon="calendar" tone="sand" value={withoutStudents} label="Sem alunos" />
-          <Kpi icon="clock" tone="gold" value={openLessons} label={openLessons === 1 ? "Aula em aberto" : "Aulas em aberto"} />
-        </div>
+        <StatGrid>
+          <Stat icon={<Glyph name="people" />} value={people.length} label="Professores ativos" />
+          <Stat icon={<Glyph name="cap" />} value={withStudents} label="Com alunos" />
+          <Stat icon={<Glyph name="calendar" />} value={withoutStudents} label="Sem alunos" />
+          <Stat icon={<Glyph name="clock" />} value={openLessons} label={openLessons === 1 ? "Aula em aberto" : "Aulas em aberto"} />
+        </StatGrid>
       )}
 
-      <section className="directory">
-        <div className="directory-bar">
-          <div className="directory-filters" role="group" aria-label="Situação">
-            <button type="button" aria-pressed={view === "todos"} onClick={() => setView("todos")}>
-              Todos ({people.length})
-            </button>
-            <button type="button" aria-pressed={view === "aula"} onClick={() => setView("aula")}>
-              Com alunos ({withStudents})
-            </button>
-            <button type="button" aria-pressed={view === "livre"} onClick={() => setView("livre")}>
-              Sem alunos ({withoutStudents})
-            </button>
+      <section className="grid gap-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="flex flex-wrap gap-1 rounded-lg bg-muted p-1" role="group" aria-label="Situação">
+            <FilterChip pressed={view === "todos"} onClick={() => setView("todos")}>Todos ({people.length})</FilterChip>
+            <FilterChip pressed={view === "aula"} onClick={() => setView("aula")}>Com alunos ({withStudents})</FilterChip>
+            <FilterChip pressed={view === "livre"} onClick={() => setView("livre")}>Sem alunos ({withoutStudents})</FilterChip>
           </div>
           <Input
-            className="roster-search"
+            className="lg:ml-auto lg:max-w-xs"
             type="search"
             value={search}
             placeholder="Buscar professor, instrumento ou aluno..."
             aria-label="Buscar professor"
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className="view-switch" role="group" aria-label="Visualização">
-            <button type="button" aria-pressed={layout === "tabela"} aria-label="Lista" onClick={() => setLayout("tabela")}>
+          <div className="flex gap-1" role="group" aria-label="Visualização">
+            <Button type="button" size="icon" variant={layout === "tabela" ? "secondary" : "outline"} aria-pressed={layout === "tabela"} aria-label="Lista" onClick={() => setLayout("tabela")}>
               <Glyph name="list" size={16} />
-            </button>
-            <button type="button" aria-pressed={layout === "cartoes"} aria-label="Cartões" onClick={() => setLayout("cartoes")}>
+            </Button>
+            <Button type="button" size="icon" variant={layout === "cartoes" ? "secondary" : "outline"} aria-pressed={layout === "cartoes"} aria-label="Cartões" onClick={() => setLayout("cartoes")}>
               <Glyph name="grid" size={16} />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -291,7 +271,7 @@ export function TeachersPage() {
         ) : rows.length === 0 ? (
           <Empty>Nenhum professor encontrado.</Empty>
         ) : layout === "cartoes" ? (
-          <ul className="person-grid">
+          <ul className="grid gap-3 sm:grid-cols-2">
             {rows.map((row) => (
               <li key={row.person.id}>
                 <TeacherTile row={row} students={students} names={names} />
@@ -299,40 +279,40 @@ export function TeachersPage() {
             ))}
           </ul>
         ) : (
-          <div className="table-scroll">
-            <table className="person-table">
-              <thead>
-                <tr>
-                  <SortHead label="Professor" active={sort === "nome"} ascending={ascending} onClick={() => toggleSort("nome")} />
-                  <SortHead label="Instrumento(s)" active={sort === "instrumento"} ascending={ascending} onClick={() => toggleSort("instrumento")} />
-                  <SortHead label="Próxima aula" active={sort === "proxima"} ascending={ascending} onClick={() => toggleSort("proxima")} />
-                  <SortHead label="Status" active={sort === "status"} ascending={ascending} onClick={() => toggleSort("status")} />
-                  <th aria-label="Ações" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.person.id}>
-                    <td>
-                      <PersonLink person={row.person} />
-                    </td>
-                    <td>
-                      <InstrumentCell names={row.taught} />
-                    </td>
-                    <td>
-                      <NextLesson next={row.next} students={students} names={names} />
-                    </td>
-                    <td>
-                      <StatusCell person={row.person} status={row.status} />
-                    </td>
-                    <td className="person-actions">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <SortHead label="Professor" active={sort === "nome"} ascending={ascending} onClick={() => toggleSort("nome")} />
+                <SortHead label="Instrumento(s)" active={sort === "instrumento"} ascending={ascending} onClick={() => toggleSort("instrumento")} />
+                <SortHead label="Próxima aula" active={sort === "proxima"} ascending={ascending} onClick={() => toggleSort("proxima")} />
+                <SortHead label="Status" active={sort === "status"} ascending={ascending} onClick={() => toggleSort("status")} />
+                <TableHead aria-label="Ações" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.person.id}>
+                  <TableCell>
+                    <PersonLink person={row.person} />
+                  </TableCell>
+                  <TableCell>
+                    <InstrumentCell names={row.taught} />
+                  </TableCell>
+                  <TableCell>
+                    <NextLesson next={row.next} students={students} names={names} />
+                  </TableCell>
+                  <TableCell>
+                    <StatusCell person={row.person} status={row.status} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
                       <RowActions person={row.person} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </section>
 
@@ -350,27 +330,11 @@ export function TeachersPage() {
   )
 }
 
-function Kpi({
-  icon,
-  tone,
-  value,
-  label,
-}: {
-  icon: "people" | "cap" | "calendar" | "clock"
-  tone: string
-  value: number
-  label: string
-}) {
+function FilterChip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <article className="kpi">
-      <span className="kpi-icon" data-tone={tone}>
-        <Glyph name={icon} />
-      </span>
-      <span>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </span>
-    </article>
+    <Button type="button" size="sm" variant={pressed ? "secondary" : "ghost"} aria-pressed={pressed} onClick={onClick}>
+      {children}
+    </Button>
   )
 }
 
@@ -386,36 +350,33 @@ function SortHead({
   onClick: () => void
 }) {
   return (
-    <th aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}>
-      <button type="button" onClick={onClick}>
+    <TableHead aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}>
+      <Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={onClick}>
         {label}
-      </button>
-    </th>
+      </Button>
+    </TableHead>
   )
 }
 
 function PersonLink({ person }: { person: Pessoa }) {
-  const wash = washFor(person.nome)
   return (
-    <Link className="person-id" to={`/escola/professores/${person.id}`}>
-      <span className="person-avatar" style={{ background: wash.background, color: wash.color }} aria-hidden="true">
-        {initial(person.nome)}
-      </span>
-      <span>
-        <strong>{person.nome}</strong>
-        <small>{formatPhone(person.telefone) || person.email}</small>
+    <Link className="flex items-center gap-2" to={`/escola/professores/${person.id}`}>
+      <PersonMark name={person.nome} />
+      <span className="grid min-w-0">
+        <strong className="truncate font-medium">{person.nome}</strong>
+        <small className="truncate text-muted-foreground">{formatPhone(person.telefone) || person.email}</small>
       </span>
     </Link>
   )
 }
 
 function InstrumentCell({ names }: { names: string[] }) {
-  if (names.length === 0) return <span className="muted">—</span>
+  if (names.length === 0) return <span className="text-muted-foreground">—</span>
   return (
-    <span className="instrument-list">
+    <span className="flex flex-wrap gap-1">
       {names.map((name) => (
-        <span key={name} className="instrument-chip">
-          <Glyph name={instrumentGlyph(name)} size={15} />
+        <span key={name} className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs">
+          <Glyph name={instrumentGlyph(name)} size={14} />
           {name}
         </span>
       ))}
@@ -432,20 +393,14 @@ function NextLesson({
   students: Map<string, string>
   names: Map<string, string>
 }) {
-  if (!next) {
-    return (
-      <span className="next-lesson">
-        <strong>Sem aula semanal</strong>
-      </span>
-    )
-  }
+  if (!next) return <strong className="font-medium">Sem aula semanal</strong>
   const day = SHORT_DAYS[next.dia_semana] ?? DIAS[next.dia_semana] ?? ""
   return (
-    <span className="next-lesson">
-      <strong>
+    <span className="grid">
+      <strong className="font-medium">
         {day}, {formatMinute(next.inicio_minuto)}
       </strong>
-      <small>
+      <small className="text-muted-foreground">
         {students.get(next.aluno_id) ?? "Aluno"} · {names.get(next.instrumento_id) ?? "Aula"}
       </small>
     </span>
@@ -454,9 +409,9 @@ function NextLesson({
 
 function StatusCell({ person, status }: { person: Pessoa; status: { label: string; tone: string } }) {
   return (
-    <span className="instrument-list">
-      <span className="badge" data-status={status.tone}>{status.label}</span>
-      {person.papeis.includes("administrador") ? <span className="badge">Administra</span> : null}
+    <span className="flex flex-wrap gap-1">
+      <ToneBadge tone={status.tone}>{status.label}</ToneBadge>
+      {person.papeis.includes("administrador") ? <ToneBadge>Administra</ToneBadge> : null}
     </span>
   )
 }
@@ -465,9 +420,9 @@ function RowActions({ person }: { person: Pessoa }) {
   const first = person.nome.trim().split(/\s+/)[0] || person.nome
   return (
     <>
-      <Link className="icon-btn" to="/escola/agenda" aria-label={`Agenda de ${person.nome}`}>
+      <Button variant="outline" size="icon" nativeButton={false} render={<Link to="/escola/agenda" aria-label={`Agenda de ${person.nome}`} />}>
         <Glyph name="calendar" size={16} />
-      </Link>
+      </Button>
       <Menu label={`Ações de ${person.nome}`}>
         <DropdownMenuItem render={<Link to={`/escola/professores/${person.id}`} />}>Abrir ficha</DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/escola/agenda" />}>Abrir agenda</DropdownMenuItem>
@@ -491,12 +446,14 @@ function TeacherTile({
   names: Map<string, string>
 }) {
   return (
-    <article className="person-tile">
-      <PersonLink person={row.person} />
-      <StatusCell person={row.person} status={row.status} />
+    <article className="grid gap-3 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">
+      <div className="flex items-start justify-between gap-2">
+        <PersonLink person={row.person} />
+        <StatusCell person={row.person} status={row.status} />
+      </div>
       <InstrumentCell names={row.taught} />
       <NextLesson next={row.next} students={students} names={names} />
-      <div className="person-actions">
+      <div className="flex justify-end gap-1">
         <RowActions person={row.person} />
       </div>
     </article>
@@ -567,16 +524,13 @@ function InviteDialog({
   }
 
   return (
-    <div
-      className="sheet"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pending) onClose()
-      }}
-    >
-      <form className="sheet-card" role="dialog" aria-modal="true" aria-labelledby="invite-teacher" onSubmit={onSubmit}>
-        <h2 id="invite-teacher">Convidar professor</h2>
-        <p className="muted">O convite chega por e-mail. A pessoa define a própria senha.</p>
+    <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose() }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Convidar professor</DialogTitle>
+          <DialogDescription>O convite chega por e-mail. A pessoa define a própria senha.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-3" onSubmit={onSubmit}>
         <label>
           Nome
           <Input ref={nameRef} value={nome} onChange={(event) => setNome(event.target.value)} required />
@@ -621,16 +575,17 @@ function InviteDialog({
           </div>
         </details>
         <ErrorNote>{error}</ErrorNote>
-        <div className="row">
+        <DialogFooter>
           <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
             Cancelar
           </Button>
-          <Button  type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending}>
             {pending ? "Enviando…" : "Enviar convite"}
           </Button>
-        </div>
-      </form>
-    </div>
+        </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
