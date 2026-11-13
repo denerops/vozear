@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom"
 import { AuthLayout } from "../components/AuthLayout.tsx"
 import { useSession } from "./session.tsx"
 import type { Papel } from "../types.ts"
+import { Button } from "@/components/ui/button"
 
 export function RequireAuth() {
   const session = useSession()
@@ -32,9 +33,9 @@ export function HomeRedirect() {
       <main className="center-card">
         <h1>Conta sem acesso</h1>
         <p>Peça à escola para concluir o seu convite.</p>
-        <button className="btn secondary" type="button" onClick={() => session.signOut()}>
+        <Button variant="outline" type="button" onClick={() => session.signOut()}>
           Sair
-        </button>
+        </Button>
       </main>
     </AuthLayout>
   )

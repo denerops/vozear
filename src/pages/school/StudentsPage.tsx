@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { Glyph, instrumentGlyph } from "../../components/glyphs.tsx"
-import { Empty, ErrorNote, ListSkeleton, Menu, Page } from "../../components/ui.tsx"
+import { Empty, ErrorNote, ListSkeleton, Menu, Page } from "../../components/chrome.tsx"
 import { loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, TIMEZONE, formatMinute, saoPauloDate, timeToMinute } from "../../lib/dates.ts"
@@ -9,6 +9,10 @@ import { accessRedirect, formatPhone } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import { whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Matricula, Pessoa } from "../../types.ts"
+import { Button } from "@/components/ui/button"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 type View = "todos" | "aula" | "livre"
 type Layout = "tabela" | "cartoes"
@@ -16,12 +20,12 @@ type SortKey = "nome" | "instrumento" | "proxima" | "status"
 
 const SHORT_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
 const WASH = [
-  { background: "#efe7fb", color: "#6d4ea3" },
-  { background: "#fde7ee", color: "#a33b5c" },
-  { background: "#f8eadf", color: "#a15a32" },
-  { background: "#f3eee6", color: "#6d5b48" },
-  { background: "#e7f3ee", color: "#1f7a52" },
-  { background: "#e7eefb", color: "#2c5d9b" },
+  { background: "#e8eefe", color: "#2f3f9a" },
+  { background: "#e7f6f2", color: "#1f6b58" },
+  { background: "#f8f0e4", color: "#8a5a20" },
+  { background: "#f3eef8", color: "#5c3d86" },
+  { background: "#eef1f6", color: "#3d4a5c" },
+  { background: "#f8ecee", color: "#8a3a48" },
 ]
 
 function fold(value: string) {
@@ -194,10 +198,10 @@ export function StudentsPage() {
       title="Alunos"
       lede="Gerencie seus alunos, turmas e aulas em um só lugar."
       action={
-        <button className="btn" type="button" onClick={() => setInviting(true)}>
+        <Button  type="button" onClick={() => setInviting(true)}>
           <Glyph name="plus" size={16} />
           Convidar aluno
-        </button>
+        </Button>
       }
     >
       <ErrorNote>{list.error}</ErrorNote>
@@ -229,7 +233,7 @@ export function StudentsPage() {
               Sem aula ({withoutClass})
             </button>
           </div>
-          <input
+          <Input
             className="roster-search"
             type="search"
             value={search}
@@ -424,12 +428,12 @@ function RowActions({ person }: { person: Pessoa }) {
         <Glyph name="calendar" size={16} />
       </Link>
       <Menu label={`Ações de ${person.nome}`}>
-        <Link role="menuitem" to={`/escola/alunos/${person.id}`}>Abrir ficha</Link>
-        <Link role="menuitem" to="/escola/agenda">Abrir agenda</Link>
+        <DropdownMenuItem render={<Link to={`/escola/alunos/${person.id}`} />}>Abrir ficha</DropdownMenuItem>
+        <DropdownMenuItem render={<Link to="/escola/agenda" />}>Abrir agenda</DropdownMenuItem>
         {person.telefone ? (
-          <a role="menuitem" href={whatsAppUrl(person.telefone, `Oi, ${first}.`)} target="_blank" rel="noreferrer">
+          <DropdownMenuItem nativeButton={false} render={<a href={whatsAppUrl(person.telefone, `Oi, ${first}.`)} target="_blank" rel="noreferrer" />}>
             WhatsApp
-          </a>
+          </DropdownMenuItem>
         ) : null}
       </Menu>
     </>
@@ -544,15 +548,15 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
         <p className="muted">O convite chega por e-mail. A pessoa define a própria senha.</p>
         <label>
           Nome
-          <input ref={nameRef} value={nome} onChange={(event) => setNome(event.target.value)} required />
+          <Input ref={nameRef} value={nome} onChange={(event) => setNome(event.target.value)} required />
         </label>
         <label>
           E-mail
-          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         </label>
         <label>
           Telefone
-          <input
+          <Input
             value={telefone}
             onChange={(event) => setTelefone(event.target.value)}
             required
@@ -565,30 +569,30 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <div className="stack">
             <label>
               Nascimento
-              <input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
+              <Input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
             </label>
             <label>
               Instagram
-              <input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
+              <Input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
             </label>
             <label>
               Outra rede
-              <input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
+              <Input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
             </label>
             <label>
               Observação interna
-              <textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} rows={3} />
+              <Textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} rows={3} />
             </label>
           </div>
         </details>
         <ErrorNote>{error}</ErrorNote>
         <div className="row">
-          <button className="btn secondary" type="button" onClick={onClose} disabled={pending}>
+          <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
             Cancelar
-          </button>
-          <button className="btn" type="submit" disabled={pending}>
+          </Button>
+          <Button  type="submit" disabled={pending}>
             {pending ? "Enviando…" : "Enviar convite"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

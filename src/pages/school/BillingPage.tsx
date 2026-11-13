@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { CardSkeleton, Empty, ErrorNote, Page, StatsSkeleton, StatusBadge } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Page, StatsSkeleton, StatusBadge } from "../../components/chrome.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { currentMonth, formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"
@@ -12,6 +12,8 @@ import { pixCopiaECola } from "../../lib/pix.ts"
 import { client } from "../../lib/supabase.ts"
 import { fillTemplate, whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Configuracao, Mensalidade, Pessoa } from "../../types.ts"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 type View = "todas" | "aberta" | "vencida" | "paga"
 
@@ -155,7 +157,7 @@ export function BillingPage() {
         </article>
       </div>}
       <div className="roster-tools">
-        <input
+        <Input
           className="roster-search"
           type="search"
           value={search}
@@ -226,22 +228,22 @@ export function BillingPage() {
                 </p>
                 {charge.situacao === "aberta" ? (
                   <div className="row">
-                    <button className="btn" type="button" onClick={() => void markPaid(charge.id)}>
+                    <Button  type="button" onClick={() => void markPaid(charge.id)}>
                       Dar baixa
-                    </button>
+                    </Button>
                     {link ? (
-                      <a className="btn secondary" href={link} target="_blank" rel="noreferrer">
+                      <Button variant="outline" nativeButton={false} render={<a href={link} target="_blank" rel="noreferrer" />} >
                         WhatsApp
-                      </a>
+                      </Button>
                     ) : !config?.chave_pix ? (
-                      <Link className="btn secondary" to="/escola/configuracao">Configurar Pix</Link>
+                      <Button variant="outline" nativeButton={false} render={<Link to="/escola/configuracao" />}>Configurar Pix</Button>
                     ) : (
                       <span className="muted">Este aluno está sem telefone.</span>
                     )}
                     {payload ? (
-                      <button className="btn secondary" type="button" onClick={() => setPixId(pixId === charge.id ? null : charge.id)}>
+                      <Button variant="outline" type="button" onClick={() => setPixId(pixId === charge.id ? null : charge.id)}>
                         {pixId === charge.id ? "Ocultar Pix" : "Ver Pix"}
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                 ) : null}

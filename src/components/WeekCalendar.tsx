@@ -82,6 +82,7 @@ export function WeekCalendar({
   anchorMinute,
   readOnly = false,
   label = "Semana",
+  refreshing = false,
   onCommit,
   onOpenLesson,
 }: {
@@ -90,6 +91,7 @@ export function WeekCalendar({
   anchorMinute: number
   readOnly?: boolean
   label?: string
+  refreshing?: boolean
   onCommit?: (slots: Slot[]) => void
   onOpenLesson: (aulaId: string) => void
 }) {
@@ -171,9 +173,11 @@ export function WeekCalendar({
   }
 
   return (
+    <div className="cal-frame">
     <div
       className="cal-scroll"
       ref={scroller}
+      aria-busy={refreshing || undefined}
       onPointerDown={(event) => {
         if (readOnly || event.button !== 0) return
         const slot = slotFromEvent(event)
@@ -255,6 +259,8 @@ export function WeekCalendar({
           </div>
         ))}
       </div>
+    </div>
+      {refreshing ? <div className="agenda-refresh" role="status" aria-label="Carregando" /> : null}
     </div>
   )
 }

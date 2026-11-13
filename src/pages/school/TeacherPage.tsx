@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { Glyph, instrumentGlyph, type GlyphName } from "../../components/glyphs.tsx"
-import { CardSkeleton, Empty, ErrorNote, Menu, Page } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Menu, Page } from "../../components/chrome.tsx"
 import { loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, TIMEZONE, formatMinute, saoPauloDate } from "../../lib/dates.ts"
@@ -12,6 +12,10 @@ import { client } from "../../lib/supabase.ts"
 import { whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Matricula, Pessoa } from "../../types.ts"
 import { InstrumentPicks, sameIds } from "./TeachersPage.tsx"
+import { Button } from "@/components/ui/button"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
 
 type Tab = "aulas" | "alunos" | "instrumentos" | "historico" | "dados"
 
@@ -24,10 +28,10 @@ const TABS: { id: Tab; label: string; icon: GlyphName }[] = [
 ]
 
 const WASH = [
-  { background: "#efe7fb", color: "#6d4ea3" },
-  { background: "#fde7ee", color: "#a33b5c" },
-  { background: "#f8eadf", color: "#a15a32" },
-  { background: "#f3eee6", color: "#6d5b48" },
+  { background: "#e8eefe", color: "#2f3f9a" },
+  { background: "#e7f6f2", color: "#1f6b58" },
+  { background: "#f8f0e4", color: "#8a5a20" },
+  { background: "#f3eef8", color: "#5c3d86" },
 ]
 
 function washFor(name: string) {
@@ -281,28 +285,24 @@ export function TeacherPage() {
               <Glyph name="calendar" size={16} />
             </Link>
             <Menu label="Mais ações">
-              <Link role="menuitem" to="/escola/agenda">Agenda</Link>
-              <button role="menuitem" type="button" onClick={() => setTab("instrumentos")}>
+              <DropdownMenuItem render={<Link to="/escola/agenda" />}>Agenda</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTab("instrumentos")}>
                 Instrumentos
-              </button>
+              </DropdownMenuItem>
             </Menu>
           </div>
         </header>
 
-        <div className="student-tabs" role="tablist" aria-label="Ficha do professor">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              onClick={() => setTab(item.id)}
-            >
-              <Glyph name={item.icon} size={15} />
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+          <TabsList className="h-auto w-full justify-start overflow-x-auto">
+            {TABS.map((item) => (
+              <TabsTrigger key={item.id} value={item.id}>
+                <Glyph name={item.icon} size={15} />
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {tab !== "dados" ? (
           <div className="kpis student-kpis">
@@ -372,23 +372,23 @@ export function TeacherPage() {
                   <form className="stack" onSubmit={(event) => void saveContact(event)}>
                     <label>
                       Telefone
-                      <input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
+                      <Input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
                     </label>
                     <label>
                       Nascimento
-                      <input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
+                      <Input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
                     </label>
                     <label>
                       Instagram
-                      <input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
+                      <Input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
                     </label>
                     <label>
                       Outra rede
-                      <input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
+                      <Input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
                     </label>
                     <div className="row">
-                      <button
-                        className="btn secondary"
+                      <Button
+                        variant="outline"
                         type="button"
                         disabled={busy}
                         onClick={() => {
@@ -400,8 +400,8 @@ export function TeacherPage() {
                         }}
                       >
                         Cancelar
-                      </button>
-                      <button className="btn" type="submit" disabled={busy}>Salvar</button>
+                      </Button>
+                      <Button  type="submit" disabled={busy}>Salvar</Button>
                     </div>
                   </form>
                 ) : (
@@ -466,9 +466,9 @@ export function TeacherPage() {
             <h2>Instrumentos</h2>
             <InstrumentPicks instruments={instruments} selected={selected} locked={locked} onChange={setSelected} />
             {locked.length > 0 ? <p className="muted">Instrumento com aula ativa permanece marcado.</p> : null}
-            <button className="btn" type="button" disabled={!dirty || busy} onClick={() => void saveInstruments()}>
+            <Button  type="button" disabled={!dirty || busy} onClick={() => void saveInstruments()}>
               Salvar instrumentos
-            </button>
+            </Button>
           </section>
         ) : null}
 
@@ -497,22 +497,22 @@ export function TeacherPage() {
             <h2>Dados do professor</h2>
             <label>
               Telefone
-              <input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
+              <Input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
             </label>
             <p className="muted">{formatPhone(telefone) || "Sem telefone"}</p>
             <label>
               Nascimento
-              <input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
+              <Input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
             </label>
             <label>
               Instagram
-              <input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
+              <Input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
             </label>
             <label>
               Outra rede
-              <input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
+              <Input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
             </label>
-            <button className="btn" type="submit" disabled={busy}>Salvar contato</button>
+            <Button  type="submit" disabled={busy}>Salvar contato</Button>
           </form>
         ) : null}
       </div>

@@ -17,7 +17,7 @@ import {
 } from "../../agenda/persist.ts"
 import { toExceptions, toSeries, type AgendaTeacher } from "../../agenda/records.ts"
 import type { AgendaClass, AgendaDraft } from "../../agenda/types.ts"
-import { ErrorNote } from "../../components/ui.tsx"
+import { ErrorNote } from "../../components/chrome.tsx"
 import { loadAulas, loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
 import { peek, remember } from "../../data/memory.ts"
 import { addDays, mondayOf, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
@@ -278,13 +278,6 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
   return (
     <div data-mode={mode}>
       <ErrorNote>{error}</ErrorNote>
-      {studentsStatus === "loading" && teachers.length === 0 ? (
-        <div className="agenda-skeleton" aria-busy="true" aria-label="Carregando">
-          {Array.from({ length: 6 }, (_, index) => (
-            <span key={index} className="bone" />
-          ))}
-        </div>
-      ) : null}
       <WeeklyCalendar
         monday={monday}
         selectedDate={selectedDate}
@@ -298,6 +291,7 @@ export function AgendaPage({ mode }: { mode: "escola" | "professor" }) {
         onOpen={setDetailsId}
         onCreateAt={(date, startMinute) => setEditing(blankDraft(date, startMinute))}
         onCreate={() => setEditing(blankDraft(selectedDate, 8 * 60))}
+        pending={studentsStatus === "loading" && teachers.length === 0}
       />
       {editing ? (
         <ClassModal

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import QRCode from "qrcode"
+import { Button } from "@/components/ui/button"
 
 export function PixBlock({ payload, sample = false }: { payload: string; sample?: boolean }) {
   const [url, setUrl] = useState<string | null>(null)
@@ -10,7 +11,7 @@ export function PixBlock({ payload, sample = false }: { payload: string; sample?
     QRCode.toDataURL(payload, {
       margin: 1,
       width: 220,
-      color: { dark: "#1c1315", light: "#ffffff" },
+      color: { dark: "#1a1d2b", light: "#ffffff" },
     }).then((value) => {
       if (alive) setUrl(value)
     })
@@ -24,8 +25,8 @@ export function PixBlock({ payload, sample = false }: { payload: string; sample?
       {url ? <img src={url} alt="QR Code do Pix" /> : null}
       {sample ? null : <code>{payload}</code>}
       {sample ? null : (
-        <button
-          className="btn secondary"
+        <Button
+          variant="outline"
           type="button"
           onClick={() => {
             void navigator.clipboard.writeText(payload)
@@ -33,7 +34,7 @@ export function PixBlock({ payload, sample = false }: { payload: string; sample?
           }}
         >
           {copied ? "Código copiado" : "Copiar Pix"}
-        </button>
+        </Button>
       )}
     </div>
   )

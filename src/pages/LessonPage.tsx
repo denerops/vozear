@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
 import { useSession } from "../auth/session.tsx"
-import { CardSkeleton, ErrorNote, Page, StatusBadge } from "../components/ui.tsx"
+import { CardSkeleton, ErrorNote, Page, StatusBadge } from "../components/chrome.tsx"
 import { loadAula, loadInstrumentos, loadRecados, nomesPorId } from "../data/api.ts"
 import { useQuery } from "../data/useQuery.ts"
 import { client } from "../lib/supabase.ts"
 import { formatWhen, saoPauloDate, saoPauloTimestamp } from "../lib/dates.ts"
 import { humanError } from "../lib/errors.ts"
 import type { RecadoLink, SituacaoAula } from "../types.ts"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 export function LessonPage() {
   const { id = "" } = useParams()
@@ -94,9 +97,9 @@ export function LessonPage() {
           <h2>Esta aula</h2>
           <div className="row">
             {(["realizada", "falta", "prevista"] as SituacaoAula[]).map((situacao) => (
-              <button
+              <Button
                 key={situacao}
-                className="btn secondary"
+                variant="outline"
                 type="button"
                 disabled={pending || aula.situacao === "cancelada"}
                 onClick={() =>
@@ -104,10 +107,10 @@ export function LessonPage() {
                 }
               >
                 {situacao === "realizada" ? "Realizada" : situacao === "falta" ? "Falta" : "Prevista"}
-              </button>
+              </Button>
             ))}
-            <button
-              className="btn danger"
+            <Button
+              variant="destructive"
               type="button"
               disabled={pending || aula.situacao === "cancelada"}
               onClick={() => {
@@ -117,7 +120,7 @@ export function LessonPage() {
               }}
             >
               Cancelar
-            </button>
+            </Button>
           </div>
           <form
             className="row"
@@ -133,15 +136,15 @@ export function LessonPage() {
           >
             <label>
               Nova data
-              <input type="date" value={quando} onChange={(event) => setQuando(event.target.value)} required />
+              <Input type="date" value={quando} onChange={(event) => setQuando(event.target.value)} required />
             </label>
             <label>
               Hora
-              <input type="time" value={hora} onChange={(event) => setHora(event.target.value)} required />
+              <Input type="time" value={hora} onChange={(event) => setHora(event.target.value)} required />
             </label>
-            <button className="btn" type="submit" disabled={pending || aula.situacao === "cancelada"}>
+            <Button  type="submit" disabled={pending || aula.situacao === "cancelada"}>
               Remarcar
-            </button>
+            </Button>
           </form>
         </section>
       ) : null}
@@ -173,13 +176,13 @@ export function LessonPage() {
           <h2>Novo recado</h2>
           <label>
             Texto
-            <textarea value={texto} onChange={(event) => setTexto(event.target.value)} rows={4} />
+            <Textarea value={texto} onChange={(event) => setTexto(event.target.value)} rows={4} />
           </label>
           {links.map((link, index) => (
             <div className="row" key={index}>
               <label>
                 Nome do link
-                <input
+                <Input
                   value={link.rotulo}
                   onChange={(event) =>
                     setLinks(links.map((item, itemIndex) =>
@@ -190,7 +193,7 @@ export function LessonPage() {
               </label>
               <label>
                 URL https
-                <input
+                <Input
                   type="url"
                   value={link.url}
                   placeholder="https://"
@@ -204,16 +207,16 @@ export function LessonPage() {
             </div>
           ))}
           <div className="row">
-            <button
-              className="btn secondary"
+            <Button
+              variant="outline"
               type="button"
               onClick={() => setLinks([...links, { rotulo: "", url: "" }])}
             >
               Outro link
-            </button>
-            <button className="btn" type="submit" disabled={pending}>
+            </Button>
+            <Button  type="submit" disabled={pending}>
               Publicar recado
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}

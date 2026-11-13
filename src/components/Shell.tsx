@@ -1,11 +1,48 @@
 import type { ReactNode } from "react"
-import { NavLink, Outlet } from "react-router-dom"
+import { NavLink, Outlet, useMatch } from "react-router-dom"
+import {
+  Calendar,
+  CreditCard,
+  GraduationCap,
+  Home,
+  LogOut,
+  Settings,
+  Users,
+} from "lucide-react"
 import { useSession } from "../auth/session.tsx"
 import { LogoMark } from "./Brand.tsx"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarSeparator,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
 
-type IconName = "home" | "calendar" | "people" | "cap" | "card" | "gear" | "exit"
+type IconName = "home" | "calendar" | "people" | "cap" | "card" | "gear"
 
 type NavItem = { to: string; label: string; end: boolean; icon: IconName }
+
+const icons: Record<IconName, ReactNode> = {
+  home: <Home />,
+  calendar: <Calendar />,
+  people: <Users />,
+  cap: <GraduationCap />,
+  card: <CreditCard />,
+  gear: <Settings />,
+}
 
 export function Shell() {
   const session = useSession()
@@ -39,100 +76,73 @@ export function Shell() {
   const roleLabel = admin ? "Administração" : professor ? "Professor" : "Aluno"
 
   return (
-    <div className="shell">
-      <nav className="nav">
-        <NavLink to="/" className="brand" end aria-label="Vozear">
-          <LogoMark size={34} />
-          <span className="brand-name">Vozear</span>
-        </NavLink>
-        <p className="nav-label">Menu</p>
-        <div className="nav-links">
-          {links.map((link) => (
-            <NavLink key={link.to} to={link.to} end={link.end}>
-              <NavIcon name={link.icon} />
-              <span className="nav-text">{link.label}</span>
-            </NavLink>
-          ))}
-        </div>
-        <div className="nav-foot">
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton className="[&_svg]:size-8" size="lg" render={<NavLink to="/" end />}>
+                <LogoMark size={32} />
+                <span className="font-heading text-base font-medium">Vozear</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Menu</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {links.map((link) => (
+                  <NavItemLink key={link.to} item={link} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
           {settings ? (
-            <NavLink to={settings.to} end={settings.end}>
-              <NavIcon name={settings.icon} />
-              <span className="nav-text">{settings.label}</span>
-            </NavLink>
+            <SidebarMenu>
+              <NavItemLink item={settings} />
+            </SidebarMenu>
           ) : null}
-          <div className="nav-user">
-            <span className="avatar" aria-hidden="true">
-              {initials}
+          <SidebarSeparator />
+          <div className="flex items-center gap-2 px-1 py-1">
+            <Avatar className="size-8">
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+            <span className="grid min-w-0 flex-1 text-sm leading-tight group-data-[collapsible=icon]:hidden">
+              <strong className="truncate font-medium">{who}</strong>
+              <small className="truncate text-muted-foreground">{roleLabel}</small>
             </span>
-            <span className="nav-user-text">
-              <strong>{who}</strong>
-              <small>{roleLabel}</small>
-            </span>
-            <button type="button" aria-label="Sair" title="Sair" onClick={() => session.signOut()}>
-              <NavIcon name="exit" />
-            </button>
+            <Button variant="ghost" size="icon" aria-label="Sair" onClick={() => session.signOut()}>
+              <LogOut />
+            </Button>
           </div>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+      <SidebarInset>
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+          <SidebarTrigger />
+          <span className="text-sm font-medium">Vozear</span>
+        </header>
+        <div className="flex flex-1 flex-col p-4 md:p-6">
+          <Outlet />
         </div>
-      </nav>
-      <div className="content">
-        <Outlet />
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }
 
-function NavIcon({ name }: { name: IconName }) {
-  const common = {
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.7,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  }
-  const paths: Record<IconName, ReactNode> = {
-    home: <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />,
-    calendar: (
-      <>
-        <rect x="4" y="5" width="16" height="15" rx="2" />
-        <path d="M8 3.5V7M16 3.5V7M4 10h16" />
-      </>
-    ),
-    people: (
-      <>
-        <circle cx="9" cy="8" r="2.4" />
-        <path d="M4.5 18.5c.6-2.6 2.4-4 4.5-4s3.9 1.4 4.5 4" />
-        <circle cx="16" cy="8.5" r="2" />
-        <path d="M16 14.5c1.6.2 2.9 1.2 3.5 3" />
-      </>
-    ),
-    cap: (
-      <>
-        <path d="M3 10 12 6l9 4-9 4z" />
-        <path d="M7 12.2V16c1.5 1.3 3.1 2 5 2s3.5-.7 5-2v-3.8" />
-        <path d="M21 10.5V16" />
-      </>
-    ),
-    card: (
-      <>
-        <rect x="3.5" y="6" width="17" height="12" rx="2" />
-        <path d="M3.5 10.5h17" />
-      </>
-    ),
-    gear: (
-      <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6.1 6.1l1.6 1.6M16.3 16.3l1.6 1.6M17.9 6.1l-1.6 1.6M7.7 16.3l-1.6 1.6" />
-      </>
-    ),
-    exit: (
-      <>
-        <path d="M10 4.5H6.5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1H10" />
-        <path d="M14.5 8.5 18 12l-3.5 3.5M18 12H9.5" />
-      </>
-    ),
-  }
-  return <svg {...common}>{paths[name]}</svg>
+function NavItemLink({ item }: { item: NavItem }) {
+  const match = useMatch({ path: item.to, end: item.end })
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton isActive={Boolean(match)} tooltip={item.label} render={<NavLink to={item.to} end={item.end} />}>
+        {icons[item.icon]}
+        <span>{item.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
 }

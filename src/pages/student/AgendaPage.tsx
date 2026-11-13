@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useSession } from "../../auth/session.tsx"
 import { WeekCalendar, WeekNav, hourMarks, type CellPaint } from "../../components/WeekCalendar.tsx"
-import { Empty, ErrorNote, Page } from "../../components/ui.tsx"
+import { Empty, ErrorNote, Page } from "../../components/chrome.tsx"
 import { loadAulas, loadInstrumentos, nomesPorId } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { addDays, agendaStartMinute, dateOfWeekday, mondayOf, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
@@ -80,13 +80,6 @@ export function StudentAgendaPage() {
       }
     >
       <ErrorNote>{query.error}</ErrorNote>
-      {loading ? (
-        <div className="agenda-skeleton" aria-busy="true" aria-label="Carregando">
-          {Array.from({ length: 6 }, (_, index) => (
-            <span key={index} className="bone" />
-          ))}
-        </div>
-      ) : null}
       {loading || aulas.length > 0 ? null : <Empty>Nenhuma aula nesta semana.</Empty>}
       <WeekCalendar
         monday={monday}
@@ -94,6 +87,7 @@ export function StudentAgendaPage() {
         anchorMinute={anchorMinute}
         readOnly
         label="Sua semana"
+        refreshing={loading}
         onOpenLesson={(aulaId) => navigate(`/aluno/aulas/${aulaId}`)}
       />
     </Page>

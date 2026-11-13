@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams } from "react-router-dom"
 import { toneFor } from "../../agenda/model.ts"
 import { Glyph, instrumentGlyph, type GlyphName } from "../../components/glyphs.tsx"
-import { CardSkeleton, Empty, ErrorNote, Menu, Page, StatusBadge } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Menu, Page, StatusBadge } from "../../components/chrome.tsx"
 import { loadAulas, loadInstrumentos, loadMatriculas, loadMensalidades, loadPessoas } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { DIAS, TIMEZONE, addDays, formatDate, formatMinute, formatMonth, formatWhen, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
@@ -11,6 +11,11 @@ import { formatMoney, formatPhone } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import { whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Aula, Matricula, Mensalidade, Pessoa } from "../../types.ts"
+import { Button } from "@/components/ui/button"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 type Tab = "matriculas" | "aulas" | "mensalidades" | "historico" | "dados"
 
@@ -23,10 +28,10 @@ const TABS: { id: Tab; label: string; icon: GlyphName }[] = [
 ]
 
 const WASH = [
-  { background: "#efe7fb", color: "#6d4ea3" },
-  { background: "#fde7ee", color: "#a33b5c" },
-  { background: "#f8eadf", color: "#a15a32" },
-  { background: "#f3eee6", color: "#6d5b48" },
+  { background: "#e8eefe", color: "#2f3f9a" },
+  { background: "#e7f6f2", color: "#1f6b58" },
+  { background: "#f8f0e4", color: "#8a5a20" },
+  { background: "#f3eef8", color: "#5c3d86" },
 ]
 
 function washFor(name: string) {
@@ -298,26 +303,22 @@ export function StudentPage() {
               <Glyph name="calendar" size={16} />
             </Link>
             <Menu label="Mais ações">
-              <Link role="menuitem" to="/escola/mensalidades">Mensalidades</Link>
-              <Link role="menuitem" to="/escola/agenda">Agenda</Link>
+              <DropdownMenuItem render={<Link to="/escola/mensalidades" />}>Mensalidades</DropdownMenuItem>
+              <DropdownMenuItem render={<Link to="/escola/agenda" />}>Agenda</DropdownMenuItem>
             </Menu>
           </div>
         </header>
 
-        <div className="student-tabs" role="tablist" aria-label="Ficha do aluno">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              onClick={() => setTab(item.id)}
-            >
-              <Glyph name={item.icon} size={15} />
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+          <TabsList className="h-auto w-full justify-start overflow-x-auto">
+            {TABS.map((item) => (
+              <TabsTrigger key={item.id} value={item.id}>
+                <Glyph name={item.icon} size={15} />
+                {item.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         {tab !== "dados" ? (
           <div className="kpis student-kpis">
@@ -387,23 +388,23 @@ export function StudentPage() {
                   <form className="stack" onSubmit={(event) => void saveContact(event)}>
                     <label>
                       Telefone
-                      <input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
+                      <Input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
                     </label>
                     <label>
                       Nascimento
-                      <input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
+                      <Input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
                     </label>
                     <label>
                       Instagram
-                      <input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
+                      <Input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
                     </label>
                     <label>
                       Outra rede
-                      <input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
+                      <Input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
                     </label>
                     <div className="row">
-                      <button
-                        className="btn secondary"
+                      <Button
+                        variant="outline"
                         type="button"
                         disabled={busy}
                         onClick={() => {
@@ -415,8 +416,8 @@ export function StudentPage() {
                         }}
                       >
                         Cancelar
-                      </button>
-                      <button className="btn" type="submit" disabled={busy}>Salvar</button>
+                      </Button>
+                      <Button  type="submit" disabled={busy}>Salvar</Button>
                     </div>
                   </form>
                 ) : (
@@ -459,11 +460,11 @@ export function StudentPage() {
                   <form className="stack" onSubmit={(event) => void saveContact(event)}>
                     <label>
                       Observação interna
-                      <textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} rows={4} />
+                      <Textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} rows={4} />
                     </label>
                     <div className="row">
-                      <button
-                        className="btn secondary"
+                      <Button
+                        variant="outline"
                         type="button"
                         disabled={busy}
                         onClick={() => {
@@ -472,8 +473,8 @@ export function StudentPage() {
                         }}
                       >
                         Cancelar
-                      </button>
-                      <button className="btn" type="submit" disabled={busy}>Salvar</button>
+                      </Button>
+                      <Button  type="submit" disabled={busy}>Salvar</Button>
                     </div>
                   </form>
                 ) : (
@@ -544,26 +545,26 @@ export function StudentPage() {
             <h2>Dados do aluno</h2>
             <label>
               Telefone
-              <input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
+              <Input value={telefone} onChange={(event) => setTelefone(event.target.value)} required inputMode="tel" />
             </label>
             <p className="muted">WhatsApp da cobrança: {formatPhone(telefone) || "sem telefone"}</p>
             <label>
               Nascimento
-              <input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
+              <Input type="date" value={nascimento} onChange={(event) => setNascimento(event.target.value)} />
             </label>
             <label>
               Instagram
-              <input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
+              <Input value={instagram} onChange={(event) => setInstagram(event.target.value)} />
             </label>
             <label>
               Outra rede
-              <input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
+              <Input value={outraRede} onChange={(event) => setOutraRede(event.target.value)} />
             </label>
             <label>
               Observação interna
-              <textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} rows={4} />
+              <Textarea value={observacao} onChange={(event) => setObservacao(event.target.value)} rows={4} />
             </label>
-            <button className="btn" type="submit" disabled={busy}>Salvar contato</button>
+            <Button  type="submit" disabled={busy}>Salvar contato</Button>
           </form>
         ) : null}
       </div>
@@ -641,20 +642,20 @@ function EnrollmentCard({
           <div className="enroll-price">
             <label>
               Mensalidade (R$)
-              <input inputMode="decimal" value={price} onChange={(event) => onPrice(event.target.value)} />
+              <Input inputMode="decimal" value={price} onChange={(event) => onPrice(event.target.value)} />
             </label>
-            <button className="btn" type="button" disabled={!dirty || busy} onClick={onSavePrice}>
+            <Button  type="button" disabled={!dirty || busy} onClick={onSavePrice}>
               Salvar
-            </button>
-            <button className="btn secondary" type="button" disabled={busy} onClick={onCancelPrice}>
+            </Button>
+            <Button variant="outline" type="button" disabled={busy} onClick={onCancelPrice}>
               Cancelar
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
       <Menu label={`Ações de ${instrument}`}>
-        <button role="menuitem" type="button" onClick={onEditPrice}>Alterar valor</button>
-        <button role="menuitem" type="button" className="danger" onClick={onClose}>Encerrar</button>
+        <DropdownMenuItem onClick={onEditPrice}>Alterar valor</DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onClick={onClose}>Encerrar</DropdownMenuItem>
       </Menu>
     </article>
   )

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react"
 import { addDays } from "../../lib/dates.ts"
 import { DAY_LABEL, weekdayOf } from "../model.ts"
+import { Input } from "@/components/ui/input"
 
 export type Choice = { value: string; label: string; hint?: string; dot?: string }
 
@@ -292,7 +293,7 @@ export function StudentField({
         Aluno
       </span>
       <span className="agenda-control">
-        <input
+        <Input
           aria-labelledby={labelId}
           aria-expanded={open}
           aria-autocomplete="list"

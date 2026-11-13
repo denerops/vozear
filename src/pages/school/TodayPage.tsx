@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { Empty, ErrorNote, ListSkeleton, Page, StatsSkeleton, StatusBadge } from "../../components/ui.tsx"
+import { Empty, ErrorNote, ListSkeleton, Page, StatsSkeleton, StatusBadge } from "../../components/chrome.tsx"
 import { loadAulas, loadInstrumentos, loadMensalidades, loadPessoas, nomesPorId } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { addDays, formatMinute, formatWhen, saoPauloClock, saoPauloDate, saoPauloTimestamp } from "../../lib/dates.ts"
@@ -7,6 +7,7 @@ import { formatMoney } from "../../lib/format.ts"
 import { client } from "../../lib/supabase.ts"
 import { confirmationMessage, confirmationUrl, whatsAppUrl } from "../../lib/whatsapp.ts"
 import type { Aula, Mensalidade } from "../../types.ts"
+import { Button } from "@/components/ui/button"
 
 type TodayData = {
   aulas: Aula[]
@@ -123,9 +124,9 @@ export function TodayPage() {
                   </span>
                 </Link>
                 {link ? (
-                  <a className="btn secondary" href={link} target="_blank" rel="noreferrer">
+                  <Button variant="outline" nativeButton={false} render={<a href={link} target="_blank" rel="noreferrer" />} >
                     Enviar confirmação
-                  </a>
+                  </Button>
                 ) : open && !telefone ? (
                   <span className="today-note">Sem telefone</span>
                 ) : null}

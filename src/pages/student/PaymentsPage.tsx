@@ -1,7 +1,7 @@
 import { useSession } from "../../auth/session.tsx"
 import { toneFor } from "../../agenda/model.ts"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { CardSkeleton, Empty, ErrorNote, Page, StatusBadge } from "../../components/ui.tsx"
+import { CardSkeleton, Empty, ErrorNote, Page, StatusBadge } from "../../components/chrome.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMensalidades } from "../../data/api.ts"
 import { useQuery } from "../../data/useQuery.ts"
 import { formatDate, formatMonth, saoPauloDate } from "../../lib/dates.ts"

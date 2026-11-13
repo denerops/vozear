@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useBlocker } from "react-router-dom"
 import { PixBlock } from "../../components/PixBlock.tsx"
-import { CardSkeleton, ErrorNote, Page } from "../../components/ui.tsx"
+import { CardSkeleton, ErrorNote, Page } from "../../components/chrome.tsx"
 import { loadConfiguracao, loadInstrumentos, loadMatriculas, loadPessoas } from "../../data/api.ts"
 import { peek } from "../../data/memory.ts"
 import { useQuery } from "../../data/useQuery.ts"
@@ -14,6 +14,10 @@ import { client } from "../../lib/supabase.ts"
 import { DEFAULT_TEMPLATE, fillTemplate, TEMPLATE_FIELDS, unknownFields } from "../../lib/whatsapp.ts"
 import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
 import { InstrumentsPanel } from "./InstrumentsPanel.tsx"
+import { applyPalette, applyTheme, PALETTES, readPalette, readTheme, type PaletteId, type ThemeMode } from "../../theme/palettes.ts"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 
 type Form = { chave: string; nome: string; cidade: string; dia: number; mensagem: string }
 
@@ -62,6 +66,8 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const [palette, setPalette] = useState<PaletteId>(() => readPalette())
+  const [theme, setTheme] = useState<ThemeMode>(() => readTheme())
   const area = useRef<HTMLTextAreaElement>(null)
   const formRef = useRef(form)
   const savedRef = useRef(saved)
@@ -186,6 +192,59 @@ export function SettingsPage() {
     >
       <ErrorNote>{error ?? query.error}</ErrorNote>
       {notice ? <p className="muted" role="status">{notice}</p> : null}
+      <section className="card settings-card is-plain">
+        <div className="settings-copy">
+          <h2>Aparência</h2>
+          <p className="muted">Claro ou escuro, e a paleta. Vale para o sistema neste navegador.</p>
+          <div className="theme-switch" role="radiogroup" aria-label="Tema">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={theme === "light"}
+              onClick={() => {
+                applyTheme("light")
+                setTheme("light")
+              }}
+            >
+              Claro
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={theme === "dark"}
+              onClick={() => {
+                applyTheme("dark")
+                setTheme("dark")
+              }}
+            >
+              Escuro
+            </button>
+          </div>
+          <div className="palette-grid" role="radiogroup" aria-label="Paleta de cores">
+            {PALETTES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={palette === item.id}
+                className={palette === item.id ? "palette-card is-selected" : "palette-card"}
+                onClick={() => {
+                  applyPalette(item.id)
+                  setPalette(item.id)
+                }}
+              >
+                <span className="palette-swatch" style={{ background: item.soft }} aria-hidden="true">
+                  <i style={{ background: item.primary }} />
+                  <i style={{ background: item.accent }} />
+                  <i style={{ background: item.ink }} />
+                </span>
+                <strong>{item.name}</strong>
+                <span>{item.description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
       {loading ? <CardSkeleton rows={2} /> : (
         <form className="stack settings" onSubmit={(event) => void save(event)}>
           <section className="card settings-card">
@@ -196,7 +255,7 @@ export function SettingsPage() {
               </p>
               <label>
                 Chave Pix
-                <input
+                <Input
                   value={form.chave}
                   aria-invalid={key.status === "invalid"}
                   onChange={(event) => edit({ chave: event.target.value })}
@@ -216,14 +275,14 @@ export function SettingsPage() {
               <div className="row">
                 <label>
                   Nome no Pix
-                  <input value={form.nome} maxLength={25} onChange={(event) => edit({ nome: event.target.value })} required />
+                  <Input value={form.nome} maxLength={25} onChange={(event) => edit({ nome: event.target.value })} required />
                   <small className="field-hint">
                     {form.nome.length}/25{nomePix && nomePix !== form.nome.trim() ? ` · Aparece como ${nomePix}` : ""}
                   </small>
                 </label>
                 <label>
                   Cidade no Pix
-                  <input value={form.cidade} maxLength={15} onChange={(event) => edit({ cidade: event.target.value })} required />
+                  <Input value={form.cidade} maxLength={15} onChange={(event) => edit({ cidade: event.target.value })} required />
                   <small className="field-hint">
                     {form.cidade.length}/15{cidadePix && cidadePix !== form.cidade.trim() ? ` · Aparece como ${cidadePix}` : ""}
                   </small>
@@ -258,7 +317,7 @@ export function SettingsPage() {
             </div>
             <label className="settings-day">
               Outro dia (1 a 28)
-              <input
+              <Input
                 type="number"
                 min={1}
                 max={28}
@@ -277,14 +336,14 @@ export function SettingsPage() {
             <div className="settings-copy">
               <div className="row spread">
                 <h2>Mensagem de cobrança</h2>
-                <button
-                  className="btn ghost"
+                <Button
+                  variant="ghost"
                   type="button"
                   disabled={form.mensagem === DEFAULT_TEMPLATE}
                   onClick={() => edit({ mensagem: DEFAULT_TEMPLATE })}
                 >
                   Restaurar padrão
-                </button>
+                </Button>
               </div>
               <p className="muted">O botão de WhatsApp abre o seu aplicativo com este texto. Nada é enviado sozinho.</p>
               <div className="instrument-picks" role="group" aria-label="Inserir campo">
@@ -296,7 +355,7 @@ export function SettingsPage() {
               </div>
               <label>
                 Texto
-                <textarea
+                <Textarea
                   ref={area}
                   value={form.mensagem}
                   rows={7}
@@ -323,12 +382,12 @@ export function SettingsPage() {
           {dirty ? (
             <div className="save-bar" role="region" aria-label="Alterações">
               <span>Alterações não salvas</span>
-              <button className="btn secondary" type="button" onClick={() => setForm(saved)}>
+              <Button variant="outline" type="button" onClick={() => setForm(saved)}>
                 Descartar
-              </button>
-              <button className="btn" type="submit" disabled={blocked || pending}>
+              </Button>
+              <Button  type="submit" disabled={blocked || pending}>
                 {pending ? "Salvando…" : "Salvar alterações"}
-              </button>
+              </Button>
             </div>
           ) : null}
         </form>

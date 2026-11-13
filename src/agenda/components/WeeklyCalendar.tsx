@@ -18,6 +18,7 @@ export function WeeklyCalendar({
   onOpen,
   onCreateAt,
   onCreate,
+  pending = false,
 }: {
   monday: string
   selectedDate: string
@@ -31,20 +32,24 @@ export function WeeklyCalendar({
   onOpen: (id: string) => void
   onCreateAt: (date: string, startMinute: number) => void
   onCreate: () => void
+  pending?: boolean
 }) {
   return (
     <div className="agenda-board">
       <section className="agenda-card agenda-weekcard">
         <CalendarHeader monday={monday} onShift={onShift} />
-        <div className="agenda-scroll">
-          <CalendarGrid
-            monday={monday}
-            selectedDate={selectedDate}
-            classes={classes}
-            onSelectDate={onSelectDate}
-            onOpen={onOpen}
-            onCreateAt={onCreateAt}
-          />
+        <div className="agenda-frame">
+          <div className="agenda-scroll" aria-busy={pending || undefined}>
+            <CalendarGrid
+              monday={monday}
+              selectedDate={selectedDate}
+              classes={classes}
+              onSelectDate={onSelectDate}
+              onOpen={onOpen}
+              onCreateAt={onCreateAt}
+            />
+          </div>
+          {pending ? <div className="agenda-refresh" role="status" aria-label="Carregando" /> : null}
         </div>
       </section>
       <TeacherPanel classes={roster} catalog={teachers} selected={teacher} onSelect={onSelectTeacher} onCreate={onCreate} />

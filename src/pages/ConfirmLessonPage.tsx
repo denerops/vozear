@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { useParams } from "react-router-dom"
 import { AuthLayout } from "../components/AuthLayout.tsx"
-import { CardSkeleton, ErrorNote } from "../components/ui.tsx"
+import { CardSkeleton, ErrorNote } from "../components/chrome.tsx"
+import { Button } from "@/components/ui/button"
 import { useQuery } from "../data/useQuery.ts"
 import { formatWhen } from "../lib/dates.ts"
 import { humanError } from "../lib/errors.ts"
@@ -39,20 +40,20 @@ export function ConfirmLessonPage() {
 
   return (
     <AuthLayout>
-      <main className="center-card stack">
-        <p className="eyebrow">Sua aula</p>
+      <main className="grid gap-4">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Sua aula</p>
         {query.pending && !lesson ? <CardSkeleton rows={2} /> : null}
         <ErrorNote>{error ?? query.error}</ErrorNote>
         {!query.pending && !query.error && !lesson ? (
           <>
-            <h1>Link inválido</h1>
-            <p>Este endereço não corresponde a uma aula. Peça um novo link para a escola.</p>
+            <h1 className="font-heading text-2xl font-medium tracking-tight">Link inválido</h1>
+            <p className="text-sm text-muted-foreground">Este endereço não corresponde a uma aula. Peça um novo link para a escola.</p>
           </>
         ) : null}
         {lesson ? (
           <>
-            <h1>{lesson.instrumento}</h1>
-            <p>
+            <h1 className="font-heading text-2xl font-medium tracking-tight">{lesson.instrumento}</h1>
+            <p className="text-sm text-muted-foreground">
               {formatWhen(lesson.inicio)} · {lesson.duracao_minutos} minutos
               <br />
               {lesson.aluno} com {lesson.professor}
@@ -62,49 +63,49 @@ export function ConfirmLessonPage() {
             ) : !lesson.aberta ? (
               <p>Esta aula não aceita mais confirmação.</p>
             ) : lesson.confirmacao === "confirmada" ? (
-              <div className="confirm-actions">
-                <div className="confirm-banner" role="status">
+              <div className="grid gap-3">
+                <div className="grid gap-1 rounded-lg border border-[color-mix(in_oklch,var(--ok)_30%,white)] bg-[var(--ok-soft)] px-4 py-3 text-[var(--ok)]" role="status">
                   <strong>Aula confirmada</strong>
-                  <span>A escola já recebeu a sua presença.</span>
+                  <span className="text-sm">A escola já recebeu a sua presença.</span>
                 </div>
                 {arming ? (
                   <>
-                    <p>Cancelar cancela só esta data.</p>
-                    <div className="confirm-row">
-                      <button className="btn danger" type="button" disabled={pending} onClick={() => void respond("cancelar")}>
+                    <p className="text-sm text-muted-foreground">Cancelar cancela só esta data.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="destructive" type="button" disabled={pending} onClick={() => void respond("cancelar")}>
                         {pending ? "Cancelando…" : "Cancelar aula"}
-                      </button>
-                      <button className="btn secondary" type="button" disabled={pending} onClick={() => setArming(false)}>
+                      </Button>
+                      <Button variant="outline" type="button" disabled={pending} onClick={() => setArming(false)}>
                         Voltar
-                      </button>
+                      </Button>
                     </div>
                   </>
                 ) : (
-                  <button className="btn danger" type="button" disabled={pending} onClick={() => setArming(true)}>
+                  <Button variant="destructive" type="button" disabled={pending} onClick={() => setArming(true)}>
                     Cancelar aula
-                  </button>
+                  </Button>
                 )}
               </div>
             ) : (
-              <div className="confirm-actions">
+              <div className="grid gap-3">
                 <p>Você vai a esta aula?</p>
-                <button className="btn" type="button" disabled={pending} onClick={() => void respond("confirmar")}>
+                <Button type="button" disabled={pending} onClick={() => void respond("confirmar")}>
                   {pending ? "Confirmando…" : "Confirmar presença"}
-                </button>
+                </Button>
                 {arming ? (
                   <>
-                    <p>Cancelar cancela só esta data.</p>
-                    <button className="btn danger" type="button" disabled={pending} onClick={() => void respond("cancelar")}>
+                    <p className="text-sm text-muted-foreground">Cancelar cancela só esta data.</p>
+                    <Button variant="destructive" type="button" disabled={pending} onClick={() => void respond("cancelar")}>
                       {pending ? "Cancelando…" : "Sim, cancelar esta aula"}
-                    </button>
-                    <button className="btn secondary" type="button" disabled={pending} onClick={() => setArming(false)}>
+                    </Button>
+                    <Button variant="outline" type="button" disabled={pending} onClick={() => setArming(false)}>
                       Voltar
-                    </button>
+                    </Button>
                   </>
                 ) : (
-                  <button className="btn secondary" type="button" disabled={pending} onClick={() => setArming(true)}>
+                  <Button variant="outline" type="button" disabled={pending} onClick={() => setArming(true)}>
                     Cancelar aula
-                  </button>
+                  </Button>
                 )}
               </div>
             )}

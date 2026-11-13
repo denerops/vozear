@@ -11,16 +11,16 @@ export const ROW_HEIGHT = 58
 export type InstrumentTone = { background: string; bar: string; dot: string }
 
 const TONES: Record<string, InstrumentTone> = {
-  canto: { background: "#F1EAFB", bar: "#7A4BC2", dot: "#9B72E6" },
-  violao: { background: "#FCF0D2", bar: "#9A5B07", dot: "#E5A220" },
-  piano: { background: "#FCE7EC", bar: "#C2294A", dot: "#E8506E" },
-  pandeiro: { background: "#DCF3EE", bar: "#0B7A6D", dot: "#1AA595" },
-  percussao: { background: "#E3ECFB", bar: "#2F62C2", dot: "#4F86E8" },
+  canto: { background: "#EDE8F6", bar: "#5C4588", dot: "#7460A0" },
+  violao: { background: "#F6F0E2", bar: "#8A5E1C", dot: "#B4843A" },
+  piano: { background: "#E8EEFB", bar: "#3146A0", dot: "#4E66C4" },
+  pandeiro: { background: "#E6F4EF", bar: "#1E6A56", dot: "#3A8872" },
+  percussao: { background: "#E9EEF4", bar: "#3A4E68", dot: "#5A708C" },
 }
 
 export function toneFor(instrument: string): InstrumentTone {
   const key = instrument.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
-  return TONES[key] ?? { background: "#F1EDE9", bar: "#6B5B60", dot: "#8A7C80" }
+  return TONES[key] ?? { background: "#F1F2F4", bar: "#4A5160", dot: "#6A7280" }
 }
 
 export function slotBounds() {

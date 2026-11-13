@@ -1,4 +1,5 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { RequireAuth, RequirePapel, HomeRedirect } from "./auth/guards.tsx"
 import { Shell } from "./components/Shell.tsx"
 import { AccessPage } from "./pages/AccessPage.tsx"
@@ -68,5 +69,9 @@ const router = createBrowserRouter(
 )
 
 export default function App() {
-  return <RouterProvider router={router} />
+  return (
+    <TooltipProvider>
+      <RouterProvider router={router} />
+    </TooltipProvider>
+  )
 }

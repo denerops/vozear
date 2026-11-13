@@ -1,5 +1,6 @@
 import { copyFileSync } from "node:fs"
 import { resolve } from "node:path"
+import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig, type Plugin } from "vitest/config"
 
@@ -16,7 +17,12 @@ function spaFallback(): Plugin {
 
 export default defineConfig({
   base: process.env.GITHUB_PAGES === "true" ? "/vozear/" : "/",
-  plugins: [react(), spaFallback()],
+  plugins: [react(), tailwindcss(), spaFallback()],
+  resolve: {
+    alias: {
+      "@": resolve("src"),
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

@@ -5,6 +5,7 @@ import { everyWeek, toneFor, weekdayOf } from "../model.ts"
 import type { AgendaTeacher } from "../records.ts"
 import type { AgendaDraft } from "../types.ts"
 import { ChoiceField, DateField, DurationField, Field, StudentField, type StudentOption } from "./FormFields.tsx"
+import { Input } from "@/components/ui/input"
 
 const DURATIONS = [30, 45, 60, 90, 120]
 
@@ -169,7 +170,7 @@ export function ClassModal({
           weekdaysOnly
         >
           <Field label="Horário">
-            <input type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
+            <Input type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
           </Field>
         </DateField>
         <DurationField value={duration} options={durations} onChange={setDuration} />

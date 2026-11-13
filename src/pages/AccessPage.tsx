@@ -2,7 +2,10 @@ import { useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { useSession } from "../auth/session.tsx"
 import { AuthLayout } from "../components/AuthLayout.tsx"
-import { ErrorNote } from "../components/ui.tsx"
+import { ErrorNote } from "../components/chrome.tsx"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { client } from "../lib/supabase.ts"
 
 export function AccessPage() {
@@ -24,18 +27,21 @@ export function AccessPage() {
 
   return (
     <AuthLayout>
-      <main className="center-card">
-        <p className="eyebrow">Primeiro acesso</p>
-        <h1>Defina sua senha</h1>
-        {session.loading ? <p className="muted">Conferindo o convite…</p> : null}
+      <main className="grid gap-6">
+        <div className="grid gap-1">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Primeiro acesso</p>
+          <h1 className="font-heading text-2xl font-medium tracking-tight">Defina sua senha</h1>
+        </div>
+        {session.loading ? <p className="text-sm text-muted-foreground">Conferindo o convite…</p> : null}
         {!session.loading && !session.userId ? (
-          <p>Abra o link do e-mail neste aparelho. Se ele expirou, peça outro convite.</p>
+          <p className="text-sm">Abra o link do e-mail neste aparelho. Se ele expirou, peça outro convite.</p>
         ) : null}
         {session.userId && !done ? (
-          <form className="stack" onSubmit={onSubmit}>
-            <label>
-              Nova senha
-              <input
+          <form className="grid gap-4" onSubmit={onSubmit}>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Nova senha</Label>
+              <Input
+                id="password"
                 type="password"
                 autoComplete="new-password"
                 minLength={8}
@@ -43,16 +49,16 @@ export function AccessPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 required
               />
-            </label>
+            </div>
             <ErrorNote>{error}</ErrorNote>
-            <button className="btn" type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending}>
               {pending ? "Salvando…" : "Salvar senha"}
-            </button>
+            </Button>
           </form>
         ) : null}
         {done ? (
-          <p>
-            Senha definida. <Link to="/">Entrar na escola</Link>
+          <p className="text-sm">
+            Senha definida. <Link className="font-medium text-primary underline-offset-4 hover:underline" to="/">Entrar na escola</Link>
           </p>
         ) : null}
       </main>

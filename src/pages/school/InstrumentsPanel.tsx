@@ -4,6 +4,8 @@ import { client } from "../../lib/supabase.ts"
 import { humanError } from "../../lib/errors.ts"
 import { formatMoneyInput, parseMoney } from "../../lib/format.ts"
 import type { Instrumento, Matricula, Pessoa } from "../../types.ts"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 function fold(value: string) {
   return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim()
@@ -139,9 +141,9 @@ export function InstrumentsPanel({
           </p>
         </div>
         {adding ? null : (
-          <button className="btn" type="button" onClick={() => setAdding(true)}>
+          <Button  type="button" onClick={() => setAdding(true)}>
             Adicionar instrumento
-          </button>
+          </Button>
         )}
       </div>
       {error ? <p className="error" role="alert">{error}</p> : null}
@@ -153,13 +155,13 @@ export function InstrumentsPanel({
           <div className="row">
             <label>
               Nome
-              <input value={novoNome} onChange={(event) => setNovoNome(event.target.value)} autoFocus required />
+              <Input value={novoNome} onChange={(event) => setNovoNome(event.target.value)} autoFocus required />
             </label>
             <label>
               Mensalidade sugerida
               <span className="money-field">
                 <span aria-hidden="true">R$</span>
-                <input
+                <Input
                   inputMode="decimal"
                   value={novoValor}
                   onChange={(event) => setNovoValor(event.target.value)}
@@ -169,11 +171,11 @@ export function InstrumentsPanel({
             </label>
           </div>
           <div className="row">
-            <button className="btn" type="submit" disabled={busyId === "novo"}>
+            <Button  type="submit" disabled={busyId === "novo"}>
               {busyId === "novo" ? "Adicionando…" : "Adicionar"}
-            </button>
-            <button
-              className="btn secondary"
+            </Button>
+            <Button
+              variant="outline"
               type="button"
               onClick={() => {
                 setAdding(false)
@@ -181,7 +183,7 @@ export function InstrumentsPanel({
               }}
             >
               Cancelar
-            </button>
+            </Button>
           </div>
         </form>
       ) : null}
@@ -211,7 +213,7 @@ export function InstrumentsPanel({
                   Mensalidade sugerida
                   <span className="money-field">
                     <span aria-hidden="true">R$</span>
-                    <input
+                    <Input
                       inputMode="decimal"
                       value={current}
                       aria-invalid={invalid}
@@ -220,23 +222,23 @@ export function InstrumentsPanel({
                   </span>
                 </label>
                 {dirty ? (
-                  <button
-                    className="btn"
+                  <Button
+                    
                     type="button"
                     disabled={invalid || busyId === item.id}
                     onClick={() => void savePrice(item)}
                   >
                     Salvar valor
-                  </button>
+                  </Button>
                 ) : null}
-                <button
-                  className="btn ghost"
+                <Button
+                  variant="ghost"
                   type="button"
                   disabled={busyId === item.id}
                   onClick={() => void toggle(item)}
                 >
                   {item.ativo ? "Desativar" : "Reativar"}
-                </button>
+                </Button>
               </div>
               {invalid ? <p className="field-hint is-error">Informe um valor maior que zero.</p> : null}
             </li>
