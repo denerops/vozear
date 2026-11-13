@@ -1,7 +1,15 @@
 import { dateOfWeekday, saoPauloDate } from "../../lib/dates.ts"
-import { DAY_LABEL, ROW_HEIGHT, WEEKDAYS, classesOn, clockLabel, hourMarks, placedEvents, slotBounds } from "../model.ts"
+import { DAY_LABEL, ROW_HEIGHT, SLOT_START, WEEKDAYS, classesOn, clockLabel, hourMarks, placedEvents, slotBounds } from "../model.ts"
 import type { AgendaClass } from "../types.ts"
 import { CalendarEvent } from "./CalendarEvent.tsx"
+
+const GHOSTS: { hour: number; minutes: number }[][] = [
+  [{ hour: 10, minutes: 60 }, { hour: 16, minutes: 60 }],
+  [{ hour: 9, minutes: 60 }, { hour: 14, minutes: 90 }],
+  [{ hour: 11, minutes: 60 }, { hour: 18, minutes: 60 }],
+  [{ hour: 8, minutes: 60 }, { hour: 15, minutes: 60 }],
+  [{ hour: 13, minutes: 60 }, { hour: 17, minutes: 60 }],
+]
 
 export function CalendarGrid({
   monday,
@@ -11,6 +19,7 @@ export function CalendarGrid({
   onSelectDate,
   onOpen,
   onCreateAt,
+  pending = false,
 }: {
   monday: string
   selectedDate: string
@@ -19,6 +28,7 @@ export function CalendarGrid({
   onSelectDate: (date: string) => void
   onOpen: (id: string) => void
   onCreateAt: (date: string, startMinute: number) => void
+  pending?: boolean
 }) {
   const today = saoPauloDate()
   const { start, end } = slotBounds()
@@ -63,6 +73,7 @@ export function CalendarGrid({
             className={`agenda-column${date === selectedDate ? " is-selected" : ""}`}
             style={{ height }}
             onClick={(event) => {
+              if (pending) return
               if ((event.target as HTMLElement).closest(".agenda-event")) return
               const offset = event.clientY - event.currentTarget.getBoundingClientRect().top
               const index = Math.min(marks.length - 1, Math.max(0, Math.floor(offset / ROW_HEIGHT)))
@@ -70,6 +81,18 @@ export function CalendarGrid({
               onCreateAt(date, start + index * 60)
             }}
           >
+            {pending
+              ? GHOSTS[WEEKDAYS.indexOf(day)]?.map((ghost) => {
+                  const top = ((ghost.hour * 60 - SLOT_START) / 60) * ROW_HEIGHT + 4
+                  const eventHeight = Math.max(28, (ghost.minutes / 60) * ROW_HEIGHT - 8)
+                  return (
+                    <div key={ghost.hour} className="agenda-ghost" style={{ top, height: eventHeight }}>
+                      <i />
+                      <i />
+                    </div>
+                  )
+                })
+              : null}
             {events.map(({ item, column, columns }) => {
               const top = ((item.startMinute - start) / 60) * ROW_HEIGHT + 4
               const raw = (item.durationMinutes / 60) * ROW_HEIGHT - 8

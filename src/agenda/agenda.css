@@ -239,6 +239,38 @@
   transition: background-color 0.15s;
 }
 .agenda-column:hover { background-color: var(--surface-2); }
+.agenda-scroll[aria-busy="true"] .agenda-column { cursor: default; }
+.agenda-scroll[aria-busy="true"] .agenda-column:hover { background-color: transparent; }
+
+.agenda-ghost {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--r-sm);
+  background: var(--muted);
+  pointer-events: none;
+  overflow: hidden;
+}
+.agenda-ghost i {
+  display: block;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--foreground) 8%, transparent) 25%,
+    color-mix(in oklch, var(--foreground) 18%, transparent) 50%,
+    color-mix(in oklch, var(--foreground) 8%, transparent) 75%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.15s ease-in-out infinite;
+}
+.agenda-ghost i:first-child { width: 58%; }
+.agenda-ghost i:last-child { width: 36%; }
 
 :root.dark .agenda-column {
   border-left-color: oklch(1 0 0 / 18%);

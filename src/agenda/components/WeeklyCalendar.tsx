@@ -51,9 +51,9 @@ export function WeeklyCalendar({
             onSelectDate={onSelectDate}
             onOpen={onOpen}
             onCreateAt={onCreateAt}
+            pending={pending}
           />
         </div>
-        {pending ? <div className="agenda-refresh" role="status" aria-label="Carregando" /> : null}
       </div>
     </div>
   )

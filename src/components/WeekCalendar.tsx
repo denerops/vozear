@@ -253,6 +253,7 @@ export function WeekCalendar({
                 >
                   {painted?.title ? <strong>{painted.title}</strong> : null}
                   {painted?.detail ? <span>{painted.detail}</span> : null}
+                  {refreshing && !painted && (minute === 10 * 60 || minute === 15 * 60) ? <i className="cal-bone" /> : null}
                 </div>
               )
             })}
@@ -260,7 +261,7 @@ export function WeekCalendar({
         ))}
       </div>
     </div>
-      {refreshing ? <div className="agenda-refresh" role="status" aria-label="Carregando" /> : null}
+      {refreshing ? <span className="sr-only" role="status">Carregando</span> : null}
     </div>
   )
 }
